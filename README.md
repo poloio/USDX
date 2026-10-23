@@ -1,5 +1,18 @@
 # UltraStar Deluxe
 
+> [!NOTE]
+> **This is a fork of [UltraStar Deluxe](https://github.com/UltraStar-Deluxe/USDX) that plays songs for 3 to 6 singers.**
+> Each singer sings one part, with their own notes, lyrics, and score. Solo songs and duet songs work as before.
+>
+> - [Download the latest build](https://github.com/poloio/USDX/releases/latest) for Windows or Linux.
+> - [Songs with 3 to 6 parts](doc/multi-part-songs/README.md): the song format, the sing screen, and the changed code.
+> - [Demo song](doc/multi-part-songs/demo-song): a round for three voices.
+>
+> The branch `trio` has the changes. The branch `master` is a copy of the official project.
+> This fork is not an official release of UltraStar Deluxe.
+>
+> ![3 players sing a song with 3 parts](doc/multi-part-songs/sing-3-players.jpg)
+
 [![Build Status](https://github.com/UltraStar-Deluxe/USDX/actions/workflows/main.yml/badge.svg)](https://github.com/UltraStar-Deluxe/USDX/actions/workflows/main.yml)
 [![License](https://img.shields.io/badge/license-GPLv2-blue.svg)](LICENSE)
 
