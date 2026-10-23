@@ -2020,6 +2020,12 @@ begin
       setColor(Static2PlayersDuetSingerP2, ColPlayer[1]);
       setColor(Static4PlayersDuetSingerP3, ColPlayer[2]);
       setColor(Static4PlayersDuetSingerP4, ColPlayer[3]);
+
+      // songs with 3 or more tracks use the rows of 3 players
+      setColor(Static3PlayersDuetSingerP1, ColPlayer[0]);
+      setColor(Static3PlayersDuetSingerP2, ColPlayer[1]);
+      setColor(Static3PlayersDuetSingerP3, ColPlayer[2]);
+      setColor(Static6PlayersDuetSingerP4, ColPlayer[3]);
     end
     else
     begin
@@ -2197,6 +2203,7 @@ procedure TScreenSong.SetScroll;
 var
   VS, B, SongsInCat: integer;
   FirstPlayer: integer;
+  ThreeRows: boolean;
   // name of the track sung by the player with the given index (0-based)
   function DuetName(PlayerIndex: integer): UTF8String;
   begin
@@ -2272,7 +2279,12 @@ begin
     // Duet Singers
     if (CatSongs.Song[Interaction].isDuet) then
     begin
-      if (PlayersPlay = 3) or (PlayersPlay = 6) then
+      // songs with 3 or more tracks show 3 rows for 4 players on one screen,
+      // player 4 sings P1 again like player 4 of 6
+      ThreeRows := (PlayersPlay = 3) or (PlayersPlay = 6) or
+        ((PlayersPlay = 4) and (Screens = 1) and (CatSongs.Song[Interaction].TrackCount > 2));
+
+      if (ThreeRows) then
       begin
         Text[Text3PlayersDuetSingerP1].Visible := true;
         Text[Text3PlayersDuetSingerP2].Visible := true;
@@ -2288,6 +2300,9 @@ begin
           Statics[Static6PlayersDuetSingerP5].Visible := true;
           Statics[Static6PlayersDuetSingerP6].Visible := true;
         end;
+
+        if (PlayersPlay = 4) then
+          Statics[Static6PlayersDuetSingerP4].Visible := true;
       end
       else
       begin
@@ -2305,7 +2320,7 @@ begin
       end;
 
       // Set duet texts
-      if (PlayersPlay = 3) or (PlayersPlay = 6) then
+      if (ThreeRows) then
       begin
         // 6 players: screen 2 shows players 4 to 6
         if (PlayersPlay = 6) and (ScreenAct = 2) then
@@ -2318,8 +2333,13 @@ begin
       end
       else
       begin
-        Text[Text2PlayersDuetSingerP1].Text := DuetName(0);
-        Text[Text2PlayersDuetSingerP2].Text := DuetName(1);
+        // 4 players on 2 screens: screen 2 shows players 3 and 4
+        if (PlayersPlay = 4) and (ScreenAct = 2) then
+          FirstPlayer := 2
+        else
+          FirstPlayer := 0;
+        Text[Text2PlayersDuetSingerP1].Text := DuetName(FirstPlayer);
+        Text[Text2PlayersDuetSingerP2].Text := DuetName(FirstPlayer + 1);
       end;
     end;
     //Set Song Score

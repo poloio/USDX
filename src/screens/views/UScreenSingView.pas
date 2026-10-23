@@ -218,6 +218,8 @@ var
 
 const
   LYRIC_HELPER_SPACE = 60; // space left of side by side lyrics for the lyric helper bar
+  LYRIC_MARK_WIDTH   = 8;  // width of the color mark of a player next to the lyrics of their track
+  LYRIC_MARK_SPACE   = 4;  // space between the lyrics and the marks and between two marks
 
 implementation
 
@@ -1318,7 +1320,8 @@ end;
  * bars of the theme. With more tracks (P3, ...) the first half of the tracks
  * shares the upper duet bar and the others share the lower one. Tracks that
  * share a bar are shown side by side, each with its current line and its
- * next line below, in full height.
+ * next line below, in full height. Space is left for the player color marks
+ * of SingDrawLyricsPlayerMarks.
  *}
 procedure TScreenSingView.SetDuetLyricsLayout(SungTracks: integer);
 var
@@ -1330,8 +1333,15 @@ var
   BarIndex:    integer; // position of the current track in its bar
   ColumnW:     real;    // width of the part of a bar used by one track
   ColumnX:     real;
+  MarksW:      real;    // space right of the lyrics for the player color marks
 begin
   UpperTracks := (SungTracks + 1) div 2;
+
+  // players sharing a track get color marks next to its lyrics
+  // (CurrentSong is not set yet when this is called on creation with 2 tracks)
+  MarksW := 0;
+  if (SungTracks > 2) and (PlayersPlay > CurrentSong.TrackCount) then
+    MarksW := Ceil(PlayersPlay / CurrentSong.TrackCount) * (LYRIC_MARK_WIDTH + LYRIC_MARK_SPACE);
 
   for TrackIndex := 0 to High(ScreenSing.LyricsDuet) do
   begin
@@ -1376,7 +1386,7 @@ begin
       ColumnX := Theme.Sing.StaticLyricsBar.X + BarIndex * ColumnW;
 
       Engine.UpperLineX := ColumnX + LYRIC_HELPER_SPACE;
-      Engine.UpperLineW := ColumnW - LYRIC_HELPER_SPACE - 5;
+      Engine.UpperLineW := ColumnW - LYRIC_HELPER_SPACE - Max(MarksW, 5);
       Engine.LowerLineX := Engine.UpperLineX;
       Engine.LowerLineW := Engine.UpperLineW;
     end;

@@ -1280,6 +1280,43 @@ begin
   end;
 end;
 
+(**
+ * If some players share a duet track (more players than tracks), marks the
+ * lyrics of each track with the colors of all players singing it, so every
+ * player finds their lyrics.
+ *)
+procedure SingDrawLyricsPlayerMarks;
+var
+  QuadList:    TQuadList;
+  PlayerIndex: integer;
+  Engine:      TLyricEngine;
+  Col:         TRGB;
+begin
+  if (PlayersPlay <= CurrentSong.TrackCount) then
+    Exit;
+
+  SetLength(QuadList, PlayersPlay);
+  for PlayerIndex := 0 to PlayersPlay - 1 do
+  begin
+    // player N sings track N mod TrackCount, the marks of a track are side by side right of its lyrics
+    Engine := ScreenSing.LyricsDuet[PlayerIndex mod CurrentSong.TrackCount];
+    Col := GetPlayerColor(Ini.SingColor[PlayerIndex]);
+
+    QuadList[PlayerIndex].X := Engine.UpperLineX + Engine.UpperLineW + LYRIC_MARK_SPACE +
+                               (PlayerIndex div CurrentSong.TrackCount) * (LYRIC_MARK_WIDTH + LYRIC_MARK_SPACE);
+    QuadList[PlayerIndex].Y := Engine.UpperLineY;
+    QuadList[PlayerIndex].Z := 0;
+    QuadList[PlayerIndex].W := LYRIC_MARK_WIDTH;
+    QuadList[PlayerIndex].H := Engine.LowerLineY + Engine.LowerLineH - Engine.UpperLineY;
+    QuadList[PlayerIndex].Gradient := gdNone;
+    QuadList[PlayerIndex].ColR := Col.R;
+    QuadList[PlayerIndex].ColG := Col.G;
+    QuadList[PlayerIndex].ColB := Col.B;
+    QuadList[PlayerIndex].Alpha := 1;
+  end;
+  Renderer.DrawQuads(QuadList);
+end;
+
 procedure SingDraw;
 var
   NR: TRecR;         // lyrics area bounds (NR = NoteRec?)
@@ -1340,6 +1377,7 @@ begin
         else
           SingDrawLyricHelper(I, NR.Left, NR.WMid);
       end;
+      SingDrawLyricsPlayerMarks;
     end
     else
     begin
