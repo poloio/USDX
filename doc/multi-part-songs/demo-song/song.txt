@@ -1,0 +1,201 @@
+#VERSION:1.1.0
+#TITLE:Row, Row, Row Your Boat (round for 3 voices)
+#ARTIST:Traditional
+#LANGUAGE:English
+#GENRE:Children's Music
+#YEAR:1881
+#CREATOR:UltraStar Deluxe trio fork demo (public domain melody and lyrics, synthesized audio)
+#AUDIO:audio.ogg
+#MP3:audio.ogg
+#BPM:300
+#GAP:2000
+#P1:Voice 1
+#P2:Voice 2
+#P3:Voice 3
+P1
+: 0 11 0 Row,
+: 12 11 0  row,
+: 24 7 0  row
+: 32 3 2  your
+: 36 11 4  boat,
+- 48
+: 48 7 4 gent
+: 56 3 2 ly
+: 60 7 4  down
+: 68 3 5  the
+* 72 23 7  stream.
+- 96
+: 96 3 12 Mer
+: 100 3 12 ri
+: 104 3 12 ly,
+: 108 3 7  mer
+: 112 3 7 ri
+: 116 3 7 ly,
+: 120 3 4  mer
+: 124 3 4 ri
+: 128 3 4 ly,
+: 132 3 0  mer
+: 136 3 0 ri
+: 140 3 0 ly,
+- 144
+: 144 7 7 life
+: 152 3 5  is
+: 156 7 4  but
+: 164 3 2  a
+* 168 23 0  dream.
+- 192
+: 192 11 0 Row,
+: 204 11 0  row,
+: 216 7 0  row
+: 224 3 2  your
+: 228 11 4  boat,
+- 240
+: 240 7 4 gent
+: 248 3 2 ly
+: 252 7 4  down
+: 260 3 5  the
+* 264 23 7  stream.
+- 288
+: 288 3 12 Mer
+: 292 3 12 ri
+: 296 3 12 ly,
+: 300 3 7  mer
+: 304 3 7 ri
+: 308 3 7 ly,
+: 312 3 4  mer
+: 316 3 4 ri
+: 320 3 4 ly,
+: 324 3 0  mer
+: 328 3 0 ri
+: 332 3 0 ly,
+- 336
+: 336 7 7 life
+: 344 3 5  is
+: 348 7 4  but
+: 356 3 2  a
+* 360 23 0  dream.
+P2
+: 48 11 0 Row,
+: 60 11 0  row,
+: 72 7 0  row
+: 80 3 2  your
+: 84 11 4  boat,
+- 96
+: 96 7 4 gent
+: 104 3 2 ly
+: 108 7 4  down
+: 116 3 5  the
+* 120 23 7  stream.
+- 144
+: 144 3 12 Mer
+: 148 3 12 ri
+: 152 3 12 ly,
+: 156 3 7  mer
+: 160 3 7 ri
+: 164 3 7 ly,
+: 168 3 4  mer
+: 172 3 4 ri
+: 176 3 4 ly,
+: 180 3 0  mer
+: 184 3 0 ri
+: 188 3 0 ly,
+- 192
+: 192 7 7 life
+: 200 3 5  is
+: 204 7 4  but
+: 212 3 2  a
+* 216 23 0  dream.
+- 240
+: 240 11 0 Row,
+: 252 11 0  row,
+: 264 7 0  row
+: 272 3 2  your
+: 276 11 4  boat,
+- 288
+: 288 7 4 gent
+: 296 3 2 ly
+: 300 7 4  down
+: 308 3 5  the
+* 312 23 7  stream.
+- 336
+: 336 3 12 Mer
+: 340 3 12 ri
+: 344 3 12 ly,
+: 348 3 7  mer
+: 352 3 7 ri
+: 356 3 7 ly,
+: 360 3 4  mer
+: 364 3 4 ri
+: 368 3 4 ly,
+: 372 3 0  mer
+: 376 3 0 ri
+: 380 3 0 ly,
+- 384
+: 384 7 7 life
+: 392 3 5  is
+: 396 7 4  but
+: 404 3 2  a
+* 408 23 0  dream.
+P3
+: 96 11 0 Row,
+: 108 11 0  row,
+: 120 7 0  row
+: 128 3 2  your
+: 132 11 4  boat,
+- 144
+: 144 7 4 gent
+: 152 3 2 ly
+: 156 7 4  down
+: 164 3 5  the
+* 168 23 7  stream.
+- 192
+: 192 3 12 Mer
+: 196 3 12 ri
+: 200 3 12 ly,
+: 204 3 7  mer
+: 208 3 7 ri
+: 212 3 7 ly,
+: 216 3 4  mer
+: 220 3 4 ri
+: 224 3 4 ly,
+: 228 3 0  mer
+: 232 3 0 ri
+: 236 3 0 ly,
+- 240
+: 240 7 7 life
+: 248 3 5  is
+: 252 7 4  but
+: 260 3 2  a
+* 264 23 0  dream.
+- 288
+: 288 11 0 Row,
+: 300 11 0  row,
+: 312 7 0  row
+: 320 3 2  your
+: 324 11 4  boat,
+- 336
+: 336 7 4 gent
+: 344 3 2 ly
+: 348 7 4  down
+: 356 3 5  the
+* 360 23 7  stream.
+- 384
+: 384 3 12 Mer
+: 388 3 12 ri
+: 392 3 12 ly,
+: 396 3 7  mer
+: 400 3 7 ri
+: 404 3 7 ly,
+: 408 3 4  mer
+: 412 3 4 ri
+: 416 3 4 ly,
+: 420 3 0  mer
+: 424 3 0 ri
+: 428 3 0 ly,
+- 432
+: 432 7 7 life
+: 440 3 5  is
+: 444 7 4  but
+: 452 3 2  a
+* 456 23 0  dream.
+E
