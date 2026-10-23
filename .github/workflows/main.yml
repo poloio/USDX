@@ -205,7 +205,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v6
       - name: Download artifacts
-        run: gh run download ${{ github.run_id }} --repo ${{ github.repository }} --dir artifacts
+        # only the game builds: the run also has a .dockerbuild record that is not a zip file
+        run: >-
+          gh run download ${{ github.run_id }} --repo ${{ github.repository }} --dir artifacts
+          --pattern 'UltraStarDeluxe-windows-*' --pattern 'UltraStarDeluxe-linux-*'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Create release
