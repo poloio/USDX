@@ -111,6 +111,7 @@ uses
   URecord,
   URenderer,
   UScreenSingController,
+  UScreenSingView,
   UScreenJukebox,
   USong,
   UWebcam;
@@ -1036,9 +1037,6 @@ begin
         Bounds.Top := Theme.LyricBar.IndicatorYOffset + Theme.LyricBar.UpperY ;
 
       Bounds.Bottom := Bounds.Top + BarHeight + 3;
-      // 3 or more duet tracks have smaller lines, keep the bar inside its line
-      if (ScreenSing.SungTrackCount > 2) then
-        Bounds.Bottom := Min(Bounds.Bottom, LyricEngine.UpperLineY + LyricEngine.UpperLineH);
 
       // draw lyric help bar
       if (CurrentSong.isDuet) then
@@ -1335,7 +1333,12 @@ begin
       for I := 0 to ScreenSing.SungTrackCount - 1 do
       begin
         ScreenSing.LyricsDuet[I].Draw(LyricsState.MidBeat);
-        SingDrawLyricHelper(I, NR.Left, NR.WMid);
+        if (ScreenSing.SungTrackCount > 2) then
+          // the lyrics of the track may be in a column of the lyrics bar
+          SingDrawLyricHelper(I, ScreenSing.LyricsDuet[I].UpperLineX - LYRIC_HELPER_SPACE,
+                              ScreenSing.LyricsDuet[I].UpperLineW / 2 + LYRIC_HELPER_SPACE)
+        else
+          SingDrawLyricHelper(I, NR.Left, NR.WMid);
       end;
     end
     else

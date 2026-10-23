@@ -216,6 +216,9 @@ type
 var
   lastVolume: single;
 
+const
+  LYRIC_HELPER_SPACE = 60; // space left of side by side lyrics for the lyric helper bar
+
 implementation
 
 uses
@@ -1312,54 +1315,70 @@ end;
 
 {**
  * Places the lyrics of the sung duet tracks. Two tracks use the duet lyric
- * bars of the theme. With more tracks (P3, ...) the current lines of all
- * tracks share the upper duet bar and their next lines share the lower one,
- * both in track order.
+ * bars of the theme. With more tracks (P3, ...) the first half of the tracks
+ * shares the upper duet bar and the others share the lower one. Tracks that
+ * share a bar are shown side by side, each with its current line and its
+ * next line below, in full height.
  *}
 procedure TScreenSingView.SetDuetLyricsLayout(SungTracks: integer);
 var
-  TrackIndex: integer;
-  Engine:     TLyricEngine;
-  Bar:        TThemeLyricBar;
-  UpperBar:   TThemeLyricBar;
-  LowerBar:   TThemeLyricBar;
-  UpperH:     real; // line height when all tracks share the upper bar
-  LowerH:     real; // line height when all tracks share the lower bar
+  TrackIndex:  integer;
+  Engine:      TLyricEngine;
+  Bar:         TThemeLyricBar;
+  UpperTracks: integer; // tracks in the upper bar
+  BarTracks:   integer; // tracks in the bar of the current track
+  BarIndex:    integer; // position of the current track in its bar
+  ColumnW:     real;    // width of the part of a bar used by one track
+  ColumnX:     real;
 begin
-  UpperBar := Theme.LyricBarDuetP1;
-  LowerBar := Theme.LyricBarDuetP2;
-  UpperH := (UpperBar.LowerY + UpperBar.LowerH - UpperBar.UpperY) / Max(SungTracks, 1);
-  LowerH := (LowerBar.LowerY + LowerBar.LowerH - LowerBar.UpperY) / Max(SungTracks, 1);
+  UpperTracks := (SungTracks + 1) div 2;
 
   for TrackIndex := 0 to High(ScreenSing.LyricsDuet) do
   begin
     Engine := ScreenSing.LyricsDuet[TrackIndex];
+
     if (SungTracks <= 2) then
     begin
       if (TrackIndex = 0) then
         Bar := Theme.LyricBarDuetP1
       else
         Bar := Theme.LyricBarDuetP2;
-
-      Engine.UpperLineX := Bar.UpperX;
-      Engine.UpperLineY := Bar.UpperY;
-      Engine.UpperLineW := Bar.UpperW;
-      Engine.UpperLineH := Bar.UpperH;
-      Engine.LowerLineX := Bar.LowerX;
-      Engine.LowerLineY := Bar.LowerY;
-      Engine.LowerLineW := Bar.LowerW;
-      Engine.LowerLineH := Bar.LowerH;
+      BarTracks := 1;
+      BarIndex := 0;
+    end
+    else if (TrackIndex < UpperTracks) then
+    begin
+      Bar := Theme.LyricBarDuetP1;
+      BarTracks := UpperTracks;
+      BarIndex := TrackIndex;
     end
     else
     begin
-      Engine.UpperLineX := UpperBar.UpperX;
-      Engine.UpperLineY := UpperBar.UpperY + TrackIndex * UpperH;
-      Engine.UpperLineW := UpperBar.UpperW;
-      Engine.UpperLineH := UpperH;
-      Engine.LowerLineX := LowerBar.UpperX;
-      Engine.LowerLineY := LowerBar.UpperY + TrackIndex * LowerH;
-      Engine.LowerLineW := LowerBar.UpperW;
-      Engine.LowerLineH := LowerH;
+      Bar := Theme.LyricBarDuetP2;
+      BarTracks := SungTracks - UpperTracks;
+      BarIndex := TrackIndex - UpperTracks;
+    end;
+
+    Engine.UpperLineX := Bar.UpperX;
+    Engine.UpperLineY := Bar.UpperY;
+    Engine.UpperLineW := Bar.UpperW;
+    Engine.UpperLineH := Bar.UpperH;
+    Engine.LowerLineX := Bar.LowerX;
+    Engine.LowerLineY := Bar.LowerY;
+    Engine.LowerLineW := Bar.LowerW;
+    Engine.LowerLineH := Bar.LowerH;
+
+    // tracks sharing a bar split the width of the lyrics bar background,
+    // each column keeps space for the lyric helper on its left
+    if (BarTracks > 1) then
+    begin
+      ColumnW := Theme.Sing.StaticLyricsBar.W / BarTracks;
+      ColumnX := Theme.Sing.StaticLyricsBar.X + BarIndex * ColumnW;
+
+      Engine.UpperLineX := ColumnX + LYRIC_HELPER_SPACE;
+      Engine.UpperLineW := ColumnW - LYRIC_HELPER_SPACE - 5;
+      Engine.LowerLineX := Engine.UpperLineX;
+      Engine.LowerLineW := Engine.UpperLineW;
     end;
   end;
 end;
