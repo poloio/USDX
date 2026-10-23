@@ -64,6 +64,13 @@ The song does not load in these conditions:
 - The official UltraStar Deluxe (version 2026.10 and older) does not load a song with `P3` or higher.
   The song shows in the song list, but it does not start.
 - Songs with 1 or 2 parts are not changed. The fork reads and plays them the same as the official game.
+- Some older duet files use `P3` for the lines that both singers sing. The official game does not load these
+  files. The fork loads them as songs with 3 parts. With 2 players, no player sings the `P3` lines.
+
+The format project discussed songs with more parts in
+[UltraStar-Deluxe/format#17](https://github.com/UltraStar-Deluxe/format/issues/17). This fork uses the
+`P1` to `Pn` approach from that discussion. Each part contains all of its lines, also the lines that all
+singers sing. No part has a special meaning, for example "all singers".
 
 ## Players and parts
 
