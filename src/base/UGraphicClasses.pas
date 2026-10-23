@@ -536,7 +536,7 @@ begin
   SetLength(PerfNoteArray,0); // remove PerfectNote positions
   for c := 0 to 5 do
   begin
-    if not CurrentSong.isDuet or ((c mod 2) = CP)  then
+    if not CurrentSong.isDuet or ((c mod CurrentSong.TrackCount) = CP)  then
       TwinkleArray[c] := 0; // reset GoldenNoteHit memory
   end;
 end;

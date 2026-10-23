@@ -87,7 +87,7 @@ type
     CheckPlayerConfigOnNextSong: boolean;
     eSongLoaded: THookableEvent; //< event is called after lyrics of a song are loaded on OnShow
     Paused:     boolean; //pause Mod
-    NumEmptySentences: array [0..1] of integer;
+    NumEmptySentences: array [0..MAX_SONG_TRACKS-1] of integer;
     // views
     fShowVisualization: boolean;
     fShowBackground: boolean;
@@ -109,8 +109,7 @@ type
     MedleyStart, MedleyEnd: real;
 
     Lyrics: TLyricEngine;
-    LyricsDuetP1: TLyricEngine;
-    LyricsDuetP2: TLyricEngine;
+    LyricsDuet: array [0..MAX_SONG_TRACKS-1] of TLyricEngine; // one per track of duets (P1, P2, P3, ...)
 
     // score manager:
     Scores: TSingScores;
@@ -186,6 +185,7 @@ type
     procedure UpdateMedleyStats(medley_end: boolean);
     procedure OnSentenceEnd(Track: integer; SentenceIndex: cardinal);     // for linebonus + singbar
     procedure OnSentenceChange(Track: integer; SentenceIndex: cardinal);  // for golden notes
+    function SungTrackCount: integer;
     property CountIn: boolean read fCountIn write fCountIn;
     property FirstNote: real read fFirstNote;
   end;
@@ -233,6 +233,7 @@ var
   Color:        TRGB;
   ResumeAfterHelp: boolean;
   NewPosition:  real;
+  NextLineBeat: integer;
 begin
   Result := true;
   if (PressedDown) then
@@ -415,14 +416,18 @@ begin
         end
         else
         begin
-          if (not CurrentSong.isDuet and (GetTimeFromBeat(Lyrics.GetUpperLine().StartNote) - AudioPlayback.Position > 6)) then
+          // skip to 5 seconds before the next line of any sung track
+          if (SungTrackCount = 1) then
+            NextLineBeat := Lyrics.GetUpperLine().StartNote
+          else
           begin
-            AudioPlayback.SetPosition(GetTimeFromBeat(Lyrics.GetUpperLine().StartNote) - 5);
-          end
-          else if (CurrentSong.isDuet and (GetTimeFromBeat(min(LyricsDuetP1.GetUpperLine().StartNote, LyricsDuetP2.GetUpperLine().StartNote)) - AudioPlayback.Position > 6)) then
-          begin
-            AudioPlayback.SetPosition(GetTimeFromBeat(min(LyricsDuetP1.GetUpperLine().StartNote, LyricsDuetP2.GetUpperLine().StartNote)) - 5);
+            NextLineBeat := LyricsDuet[0].GetUpperLine().StartNote;
+            for i1 := 1 to SungTrackCount - 1 do
+              NextLineBeat := min(NextLineBeat, LyricsDuet[i1].GetUpperLine().StartNote);
           end;
+
+          if (GetTimeFromBeat(NextLineBeat) - AudioPlayback.Position > 6) then
+            AudioPlayback.SetPosition(GetTimeFromBeat(NextLineBeat) - 5);
           Exit;
         end;
       end;
@@ -676,11 +681,13 @@ begin
 end;
 
 destructor TScreenSingController.Destroy;
+var
+  TrackIndex: integer;
 begin
   FreeAndNil(screenSingViewRef);
   Lyrics.Free;
-  LyricsDuetP1.Free;
-  LyricsDuetP2.Free;
+  for TrackIndex := 0 to High(LyricsDuet) do
+    LyricsDuet[TrackIndex].Free;
   fLyricsSync.Free;
   fMusicSync.Free;
   eSongLoaded.Free;
@@ -692,7 +699,8 @@ end;
 procedure TScreenSingController.OnShow;
 var
   BadPlayer: integer;
-  Col, ColP1, ColP2: TRGB;
+  TrackIndex: integer;
+  Col: TRGB;
 begin
   inherited;
 
@@ -761,54 +769,36 @@ begin
   // set custom options
   if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
   begin
-    ColP1 := GetPlayerColor(Ini.PlayerColor[0]);
-    ColP2 := GetPlayerColor(Ini.PlayerColor[1]);
+    for TrackIndex := 0 to High(LyricsDuet) do
+    begin
+      LyricsDuet[TrackIndex].FontFamily := Ini.LyricsFont;
+      LyricsDuet[TrackIndex].FontStyle := Ini.LyricsStyle;
 
-    LyricsDuetP1.FontFamily := Ini.LyricsFont;
-    LyricsDuetP2.FontFamily := Ini.LyricsFont;
+      // set custom options
+      Col := GetPlayerColor(Ini.PlayerColor[TrackIndex]);
+      LyricsDuet[TrackIndex].LineColor_act.R := Col.R;
+      LyricsDuet[TrackIndex].LineColor_act.G := Col.G;
+      LyricsDuet[TrackIndex].LineColor_act.B := Col.B;
+      LyricsDuet[TrackIndex].LineColor_act.A := 1;
 
-    LyricsDuetP1.FontStyle := Ini.LyricsStyle;
-    LyricsDuetP2.FontStyle := Ini.LyricsStyle;
+      if (Ini.JukeboxActualLineColor = High(UIni.IActualLineColor)) then
+        Col := GetJukeboxLyricOtherColor(1)
+      else
+        Col := GetLyricGrayColor(Ini.JukeboxActualLineColor);
+      LyricsDuet[TrackIndex].LineColor_en.R := Col.R;
+      LyricsDuet[TrackIndex].LineColor_en.G := Col.G;
+      LyricsDuet[TrackIndex].LineColor_en.B := Col.B;
+      LyricsDuet[TrackIndex].LineColor_en.A := 1;
 
-    // set custom options
-    LyricsDuetP1.LineColor_act.R := ColP1.R;
-    LyricsDuetP1.LineColor_act.G := ColP1.G;
-    LyricsDuetP1.LineColor_act.B := ColP1.B;
-    LyricsDuetP1.LineColor_act.A := 1;
-
-    LyricsDuetP2.LineColor_act.R := ColP2.R;
-    LyricsDuetP2.LineColor_act.G := ColP2.G;
-    LyricsDuetP2.LineColor_act.B := ColP2.B;
-    LyricsDuetP2.LineColor_act.A := 1;
-
-    if (Ini.JukeboxActualLineColor = High(UIni.IActualLineColor)) then
-      Col := GetJukeboxLyricOtherColor(1)
-    else
-      Col := GetLyricGrayColor(Ini.JukeboxActualLineColor);
-    LyricsDuetP1.LineColor_en.R := Col.R;
-    LyricsDuetP1.LineColor_en.G := Col.G;
-    LyricsDuetP1.LineColor_en.B := Col.B;
-    LyricsDuetP1.LineColor_en.A := 1;
-
-    LyricsDuetP2.LineColor_en.R := Col.R;
-    LyricsDuetP2.LineColor_en.G := Col.G;
-    LyricsDuetP2.LineColor_en.B := Col.B;
-    LyricsDuetP2.LineColor_en.A := 1;
-
-    if (Ini.JukeboxNextLineColor = High(UIni.INextLineColor)) then
-      Col := GetJukeboxLyricOtherColor(2)
-    else
-      Col := GetLyricGrayColor(Ini.JukeboxNextLineColor);
-    LyricsDuetP1.LineColor_dis.R := Col.R;
-    LyricsDuetP1.LineColor_dis.G := Col.G;
-    LyricsDuetP1.LineColor_dis.B := Col.B;
-    LyricsDuetP1.LineColor_dis.A := 1;
-
-    LyricsDuetP2.LineColor_dis.R := Col.R;
-    LyricsDuetP2.LineColor_dis.G := Col.G;
-    LyricsDuetP2.LineColor_dis.B := Col.B;
-    LyricsDuetP2.LineColor_dis.A := 1;
-
+      if (Ini.JukeboxNextLineColor = High(UIni.INextLineColor)) then
+        Col := GetJukeboxLyricOtherColor(2)
+      else
+        Col := GetLyricGrayColor(Ini.JukeboxNextLineColor);
+      LyricsDuet[TrackIndex].LineColor_dis.R := Col.R;
+      LyricsDuet[TrackIndex].LineColor_dis.G := Col.G;
+      LyricsDuet[TrackIndex].LineColor_dis.B := Col.B;
+      LyricsDuet[TrackIndex].LineColor_dis.A := 1;
+    end;
   end
   else
   begin
@@ -873,9 +863,9 @@ begin
       if CurrentSong.isDuet then
       begin
         if ScreenSong.DuetChange then
-          Track := (PlayerIndex + 1) mod 2
+          Track := (PlayerIndex + 1) mod CurrentSong.TrackCount
         else
-          Track := PlayerIndex mod 2;
+          Track := PlayerIndex mod CurrentSong.TrackCount;
       end;
     end;
 
@@ -1012,6 +1002,7 @@ procedure TScreenSingController.LoadNextSong();
 var
   Color:      TRGB;
   Index:      integer;
+  TrackIndex: integer;
   VideoFile:  IPath;
   BgFile:     IPath;
   success:    boolean;
@@ -1255,18 +1246,16 @@ begin
 
   if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
   begin
-    // initialize lyrics by filling its queue
-    while (not LyricsDuetP1.IsQueueFull) and
-          (LyricsDuetP1.LineCounter <= High(CurrentSong.Tracks[0].Lines)) do
-    begin
-      LyricsDuetP1.AddLine(@CurrentSong.Tracks[0].Lines[LyricsDuetP1.LineCounter]);
-    end;
+    screenSingViewRef.SetDuetLyricsLayout(SungTrackCount);
 
-    // initialize lyrics by filling its queue
-    while (not LyricsDuetP2.IsQueueFull) and
-          (LyricsDuetP2.LineCounter <= High(CurrentSong.Tracks[1].Lines)) do
+    for TrackIndex := 0 to SungTrackCount - 1 do
     begin
-      LyricsDuetP2.AddLine(@CurrentSong.Tracks[1].Lines[LyricsDuetP2.LineCounter]);
+      // initialize lyrics by filling its queue
+      while (not LyricsDuet[TrackIndex].IsQueueFull) and
+            (LyricsDuet[TrackIndex].LineCounter <= High(CurrentSong.Tracks[TrackIndex].Lines)) do
+      begin
+        LyricsDuet[TrackIndex].AddLine(@CurrentSong.Tracks[TrackIndex].Lines[LyricsDuet[TrackIndex].LineCounter]);
+      end;
     end;
   end
   else
@@ -1280,30 +1269,19 @@ begin
   end;
 
   // kill all stars not killed yet (goldenstarstwinkle mod)
-  GoldenRec.SentenceChange(0);
-  if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
-    GoldenRec.SentenceChange(1);
+  for TrackIndex := 0 to SungTrackCount - 1 do
+    GoldenRec.SentenceChange(TrackIndex);
 
   // set position of line bonus - line bonus end
   // set number of empty sentences for line bonus
-  NumEmptySentences[0] := 0;
-  NumEmptySentences[1] := 0;
+  for TrackIndex := 0 to High(NumEmptySentences) do
+    NumEmptySentences[TrackIndex] := 0;
 
-  if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
+  for TrackIndex := 0 to SungTrackCount - 1 do
   begin
-    for Index := Low(CurrentSong.Tracks[1].Lines) to High(CurrentSong.Tracks[1].Lines) do
-      if CurrentSong.Tracks[1].Lines[Index].ScoreValue = 0 then
-        Inc(NumEmptySentences[1]);
-
-    for Index := Low(CurrentSong.Tracks[0].Lines) to High(CurrentSong.Tracks[0].Lines) do
-      if CurrentSong.Tracks[0].Lines[Index].ScoreValue = 0 then
-        Inc(NumEmptySentences[0]);
-  end
-  else
-  begin
-    for Index := Low(CurrentSong.Tracks[0].Lines) to High(CurrentSong.Tracks[0].Lines) do
-      if CurrentSong.Tracks[0].Lines[Index].ScoreValue = 0 then
-        Inc(NumEmptySentences[0]);
+    for Index := Low(CurrentSong.Tracks[TrackIndex].Lines) to High(CurrentSong.Tracks[TrackIndex].Lines) do
+      if CurrentSong.Tracks[TrackIndex].Lines[Index].ScoreValue = 0 then
+        Inc(NumEmptySentences[TrackIndex]);
   end;
 
   eSongLoaded.CallHookChain(False);
@@ -1326,10 +1304,12 @@ begin
 end;
 
 procedure TScreenSingController.ClearLyricEngines();
+var
+  TrackIndex: integer;
 begin
   Lyrics.Clear(CurrentSong.BPM);
-  LyricsDuetP1.Clear(CurrentSong.BPM);
-  LyricsDuetP2.Clear(CurrentSong.BPM);
+  for TrackIndex := 0 to High(LyricsDuet) do
+    LyricsDuet[TrackIndex].Clear(CurrentSong.BPM);
 end;
 
 procedure TScreenSingController.CalculateStartTime;
@@ -1754,7 +1734,7 @@ begin
 
   for PlayerIndex := 0 to High(Player) do
   begin
-    if (not CurrentSong.isDuet) or (PlayerIndex mod 2 = Track) or (PlayersPlay = 1)then
+    if (not CurrentSong.isDuet) or (PlayerIndex mod CurrentSong.TrackCount = Track) or (PlayersPlay = 1)then
     begin
       CurrentPlayer := @Player[PlayerIndex];
       CurrentScore  := CurrentPlayer.Score + CurrentPlayer.ScoreGolden;
@@ -1823,12 +1803,7 @@ begin
   GoldenRec.SentenceChange(Track);
 
   if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
-  begin
-    if (Track = 1) then
-      tmp_Lyric := LyricsDuetP2
-    else
-      tmp_Lyric := LyricsDuetP1;
-  end
+    tmp_Lyric := LyricsDuet[Track]
   else
     tmp_Lyric := Lyrics;
 
@@ -1845,6 +1820,16 @@ begin
       tmp_Lyric.AddLine(nil);
   end;
 
+end;
+
+// number of song tracks sung by the players, each one with its own lyrics:
+// 1 for solo songs and for one player, else one track per player at most
+function TScreenSingController.SungTrackCount: integer;
+begin
+  if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
+    Result := Min(CurrentSong.TrackCount, PlayersPlay)
+  else
+    Result := 1;
 end;
 
 function TLyricsSyncSource.GetClock(): real;

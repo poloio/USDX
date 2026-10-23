@@ -158,6 +158,9 @@ type
   end;
 
 const
+  MAX_SONG_TRACKS = 6; // highest track (P1..P6) of a song, one track per player
+
+const
   FFTSize = 512; // size of FFT data (output: FFTSize/2 values)
 type
   TFFTData  = array[0..(FFTSize div 2)-1] of Single;

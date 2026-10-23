@@ -971,12 +971,7 @@ begin
 
   // FIXME: accessing ScreenSing is not that generic
   if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
-  begin
-    if (CP = 1) then
-      LyricEngine := ScreenSing.LyricsDuetP2
-    else
-      LyricEngine := ScreenSing.LyricsDuetP1;
-  end
+    LyricEngine := ScreenSing.LyricsDuet[CP]
   else
     LyricEngine := ScreenSing.Lyrics;
 
@@ -1033,14 +1028,17 @@ begin
       if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
       begin
         if (CP = 0) then
-          Bounds.Top := Theme.LyricBarDuetP1.IndicatorYOffset + Theme.LyricBarDuetP1.UpperY
+          Bounds.Top := Theme.LyricBarDuetP1.IndicatorYOffset + LyricEngine.UpperLineY
         else
-          Bounds.Top := Theme.LyricBarDuetP2.IndicatorYOffset + Theme.LyricBarDuetP2.UpperY ;
+          Bounds.Top := Theme.LyricBarDuetP2.IndicatorYOffset + LyricEngine.UpperLineY;
       end
       else
         Bounds.Top := Theme.LyricBar.IndicatorYOffset + Theme.LyricBar.UpperY ;
 
       Bounds.Bottom := Bounds.Top + BarHeight + 3;
+      // 3 or more duet tracks have smaller lines, keep the bar inside its line
+      if (ScreenSing.SungTrackCount > 2) then
+        Bounds.Bottom := Min(Bounds.Bottom, LyricEngine.UpperLineY + LyricEngine.UpperLineH);
 
       // draw lyric help bar
       if (CurrentSong.isDuet) then
@@ -1288,8 +1286,6 @@ procedure SingDraw;
 var
   NR: TRecR;         // lyrics area bounds (NR = NoteRec?)
   LyricEngine: TLyricEngine;
-  LyricEngineDuetP1: TLyricEngine;
-  LyricEngineDuetP2: TLyricEngine;
   I: integer;
   Difficulty: integer;
   TrackP1, TrackP2, TrackP3, TrackP4, TrackP5, TrackP6: integer;
@@ -1321,11 +1317,12 @@ begin
   // FIXME: accessing ScreenSing is not that generic
   if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
   begin
-    LyricEngineDuetP1 := ScreenSing.LyricsDuetP1;
-    LyricEngineDuetP2 := ScreenSing.LyricsDuetP2;
-    TrackP2 := 1;
-    TrackP4 := 1;
-    TrackP6 := 1;
+    // player N sings track N, wrapping around if there are more players than tracks
+    TrackP2 := 1 mod CurrentSong.TrackCount;
+    TrackP3 := 2 mod CurrentSong.TrackCount;
+    TrackP4 := 3 mod CurrentSong.TrackCount;
+    TrackP5 := 4 mod CurrentSong.TrackCount;
+    TrackP6 := 5 mod CurrentSong.TrackCount;
   end
   else
     LyricEngine := ScreenSing.Lyrics;
@@ -1335,11 +1332,11 @@ begin
   begin
     if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
     begin
-      LyricEngineDuetP1.Draw(LyricsState.MidBeat);
-      SingDrawLyricHelper(0, NR.Left, NR.WMid);
-
-      LyricEngineDuetP2.Draw(LyricsState.MidBeat);
-      SingDrawLyricHelper(1, NR.Left, NR.WMid);
+      for I := 0 to ScreenSing.SungTrackCount - 1 do
+      begin
+        ScreenSing.LyricsDuet[I].Draw(LyricsState.MidBeat);
+        SingDrawLyricHelper(I, NR.Left, NR.WMid);
+      end;
     end
     else
     begin

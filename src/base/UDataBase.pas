@@ -568,10 +568,7 @@ begin
   Result := Length(Song.Tracks);
   // Song selection normally loads only headers, without the note tracks.
   if Result = 0 then
-    if Song.isDuet then
-      Result := 2
-    else
-      Result := 1;
+    Result := Song.TrackCount;
 end;
 
 (**

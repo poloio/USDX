@@ -210,6 +210,8 @@ type
     function GetLyricColor(Color: integer): TRGB;
 
     procedure DrawInfoLyricBar();
+
+    procedure SetDuetLyricsLayout(SungTracks: integer);
   end;
 var
   lastVolume: single;
@@ -594,13 +596,10 @@ begin
       Theme.LyricBar.UpperX, Theme.LyricBar.UpperY, Theme.LyricBar.UpperW, Theme.LyricBar.UpperH,
       Theme.LyricBar.LowerX, Theme.LyricBar.LowerY, Theme.LyricBar.LowerW, Theme.LyricBar.LowerH);
 
-  ScreenSing.LyricsDuetP1 := TLyricEngine.Create(
-      Theme.LyricBarDuetP1.UpperX, Theme.LyricBarDuetP1.UpperY, Theme.LyricBarDuetP1.UpperW, Theme.LyricBarDuetP1.UpperH,
-      Theme.LyricBarDuetP1.LowerX, Theme.LyricBarDuetP1.LowerY, Theme.LyricBarDuetP1.LowerW, Theme.LyricBarDuetP1.LowerH);
-
-  ScreenSing.LyricsDuetP2 := TLyricEngine.Create(
-      Theme.LyricBarDuetP2.UpperX, Theme.LyricBarDuetP2.UpperY, Theme.LyricBarDuetP2.UpperW, Theme.LyricBarDuetP2.UpperH,
-      Theme.LyricBarDuetP2.LowerX, Theme.LyricBarDuetP2.LowerY, Theme.LyricBarDuetP2.LowerW, Theme.LyricBarDuetP2.LowerH);
+  // one lyric engine per duet track, the positions are set by SetDuetLyricsLayout
+  for I := 0 to High(ScreenSing.LyricsDuet) do
+    ScreenSing.LyricsDuet[I] := TLyricEngine.Create(0, 0, 0, 0, 0, 0, 0, 0);
+  SetDuetLyricsLayout(2);
 
   ScreenSing.fLyricsSync := TLyricsSyncSource.Create();
   ScreenSing.fMusicSync := TMusicSyncSource.Create();
@@ -686,7 +685,7 @@ var
   CurLyricsTime:          real;
   VideoFrameTime:         Extended;
   Line:                   TLyricLine;
-  LineDuet:               TLyricLine;
+  TrackIndex:             integer;
   medley_end:             boolean;
   medley_start_applause:  boolean;
   LastLineSungToEnd:      boolean;
@@ -755,13 +754,13 @@ begin
     begin
       if (PlayersPlay = 4) then
       begin
-        ScreenSing.LyricsDuetP1.LineColor_act.R := ColPlayer[0].R;
-        ScreenSing.LyricsDuetP1.LineColor_act.G := ColPlayer[0].G;
-        ScreenSing.LyricsDuetP1.LineColor_act.B := ColPlayer[0].B;
+        ScreenSing.LyricsDuet[0].LineColor_act.R := ColPlayer[0].R;
+        ScreenSing.LyricsDuet[0].LineColor_act.G := ColPlayer[0].G;
+        ScreenSing.LyricsDuet[0].LineColor_act.B := ColPlayer[0].B;
 
-        ScreenSing.LyricsDuetP2.LineColor_act.R := ColPlayer[1].R;
-        ScreenSing.LyricsDuetP2.LineColor_act.G := ColPlayer[1].G;
-        ScreenSing.LyricsDuetP2.LineColor_act.B := ColPlayer[1].B;
+        ScreenSing.LyricsDuet[1].LineColor_act.R := ColPlayer[1].R;
+        ScreenSing.LyricsDuet[1].LineColor_act.G := ColPlayer[1].G;
+        ScreenSing.LyricsDuet[1].LineColor_act.B := ColPlayer[1].B;
       end;
     end;
   end;
@@ -776,13 +775,13 @@ begin
 
         if (CurrentSong.isDuet) and (PlayersPlay = 4) then
         begin
-          ScreenSing.LyricsDuetP1.LineColor_act.R := ColPlayer[2].R;
-          ScreenSing.LyricsDuetP1.LineColor_act.G := ColPlayer[2].G;
-          ScreenSing.LyricsDuetP1.LineColor_act.B := ColPlayer[2].B;
+          ScreenSing.LyricsDuet[0].LineColor_act.R := ColPlayer[2].R;
+          ScreenSing.LyricsDuet[0].LineColor_act.G := ColPlayer[2].G;
+          ScreenSing.LyricsDuet[0].LineColor_act.B := ColPlayer[2].B;
 
-          ScreenSing.LyricsDuetP2.LineColor_act.R := ColPlayer[3].R;
-          ScreenSing.LyricsDuetP2.LineColor_act.G := ColPlayer[3].G;
-          ScreenSing.LyricsDuetP2.LineColor_act.B := ColPlayer[3].B;
+          ScreenSing.LyricsDuet[1].LineColor_act.R := ColPlayer[3].R;
+          ScreenSing.LyricsDuet[1].LineColor_act.G := ColPlayer[3].G;
+          ScreenSing.LyricsDuet[1].LineColor_act.B := ColPlayer[3].B;
         end;
 
       end;
@@ -863,14 +862,17 @@ begin
   if not ScreenSing.SungToEnd and CurrentSong.isDuet and (PlayersPlay <> 1) and
       not ScreenSong.RapToFreestyle then
   begin
-    Line := ScreenSing.LyricsDuetP1.GetUpperLine();
-    LineDuet := ScreenSing.LyricsDuetP2.GetUpperLine();
-    if Line.LastLine and LineDuet.LastLine and
-        (Length(Line.Words) > 0) and (Length(LineDuet.Words) > 0) and
-        (CurLyricsTime >= GetTimeFromBeat(Line.Words[High(Line.Words)].Start +
-            Line.Words[High(Line.Words)].Length)) and
-        (CurLyricsTime >= GetTimeFromBeat(LineDuet.Words[High(LineDuet.Words)].Start +
-            LineDuet.Words[High(LineDuet.Words)].Length)) then
+    // the last lines of all sung tracks must be finished
+    LastLineSungToEnd := true;
+    for TrackIndex := 0 to ScreenSing.SungTrackCount - 1 do
+    begin
+      Line := ScreenSing.LyricsDuet[TrackIndex].GetUpperLine();
+      if not Line.LastLine or (Length(Line.Words) = 0) or
+          (CurLyricsTime < GetTimeFromBeat(Line.Words[High(Line.Words)].Start +
+            Line.Words[High(Line.Words)].Length)) then
+        LastLineSungToEnd := false;
+    end;
+    if LastLineSungToEnd then
       ScreenSing.SungToEnd := true;
   end;
 
@@ -1306,6 +1308,60 @@ begin
   QuadList[I].ColB := Theme.Sing.StaticTimeProgress.ColB;
   QuadList[I].Alpha := 1;
   Renderer.DrawQuads(QuadList);
+end;
+
+{**
+ * Places the lyrics of the sung duet tracks. Two tracks use the duet lyric
+ * bars of the theme. With more tracks (P3, ...) the current lines of all
+ * tracks share the upper duet bar and their next lines share the lower one,
+ * both in track order.
+ *}
+procedure TScreenSingView.SetDuetLyricsLayout(SungTracks: integer);
+var
+  TrackIndex: integer;
+  Engine:     TLyricEngine;
+  Bar:        TThemeLyricBar;
+  UpperBar:   TThemeLyricBar;
+  LowerBar:   TThemeLyricBar;
+  UpperH:     real; // line height when all tracks share the upper bar
+  LowerH:     real; // line height when all tracks share the lower bar
+begin
+  UpperBar := Theme.LyricBarDuetP1;
+  LowerBar := Theme.LyricBarDuetP2;
+  UpperH := (UpperBar.LowerY + UpperBar.LowerH - UpperBar.UpperY) / Max(SungTracks, 1);
+  LowerH := (LowerBar.LowerY + LowerBar.LowerH - LowerBar.UpperY) / Max(SungTracks, 1);
+
+  for TrackIndex := 0 to High(ScreenSing.LyricsDuet) do
+  begin
+    Engine := ScreenSing.LyricsDuet[TrackIndex];
+    if (SungTracks <= 2) then
+    begin
+      if (TrackIndex = 0) then
+        Bar := Theme.LyricBarDuetP1
+      else
+        Bar := Theme.LyricBarDuetP2;
+
+      Engine.UpperLineX := Bar.UpperX;
+      Engine.UpperLineY := Bar.UpperY;
+      Engine.UpperLineW := Bar.UpperW;
+      Engine.UpperLineH := Bar.UpperH;
+      Engine.LowerLineX := Bar.LowerX;
+      Engine.LowerLineY := Bar.LowerY;
+      Engine.LowerLineW := Bar.LowerW;
+      Engine.LowerLineH := Bar.LowerH;
+    end
+    else
+    begin
+      Engine.UpperLineX := UpperBar.UpperX;
+      Engine.UpperLineY := UpperBar.UpperY + TrackIndex * UpperH;
+      Engine.UpperLineW := UpperBar.UpperW;
+      Engine.UpperLineH := UpperH;
+      Engine.LowerLineX := LowerBar.UpperX;
+      Engine.LowerLineY := LowerBar.UpperY + TrackIndex * LowerH;
+      Engine.LowerLineW := LowerBar.UpperW;
+      Engine.LowerLineH := LowerH;
+    end;
+  end;
 end;
 
 end.

@@ -189,6 +189,7 @@ type
 
     isDuet: boolean;
     DuetNames:  array of UTF8String; // duet singers name
+    TrackCount: integer; // number of tracks (P1, P2, P3, ...), already known after reading the header
 
     hasRap: boolean;
 
@@ -205,7 +206,7 @@ type
     VisibleIndex: integer;
 
     Base:       array[0..1] of integer;
-    Rel:        array[0..1] of integer;
+    Rel:        array[0..MAX_SONG_TRACKS-1] of integer;
     Mult:       integer;
 
     LastError:  AnsiString;
@@ -392,6 +393,7 @@ begin
   Self.Vocals   := PATH_NONE();
   Self.Background:= PATH_NONE();
   Self.Video    := PATH_NONE();
+  Self.TrackCount := 1;
 
   // create default version
   Self.FormatVersion := TVersion.Create();
@@ -634,7 +636,8 @@ var
   LinePos:      integer;
   TrackIndex:   integer;
   NoteIndex:    integer;
-  CurrentTrack: integer; // P1: 0, P2: 1
+  CurrentTrack: integer; // P1: 0, P2: 1, P3: 2, ...
+  FirstTrack:   TLines;
 
   Param0:       AnsiChar;
   Param1:       integer;
@@ -643,6 +646,33 @@ var
   ParamLyric:   UTF8String;
 
   NotesFound:   boolean;
+
+  // grows Tracks to Count tracks and initializes the new ones
+  procedure AddTracks(const Count: integer);
+  var
+    FirstNewIdx, TrackIdx: integer;
+  begin
+    FirstNewIdx := Length(Tracks);
+    SetLength(Tracks, Count);
+    for TrackIdx := FirstNewIdx to High(Tracks) do
+    begin
+      Tracks[TrackIdx].High := 0;
+      Tracks[TrackIdx].Number := 1;
+      Tracks[TrackIdx].CurrentLine := 0;
+      Tracks[TrackIdx].NotesGAP   := self.NotesGAP;
+      Tracks[TrackIdx].ScoreValue := 0;
+
+      //Add first line and set some standard values to fields
+      //see procedure NewSentence for further explantation
+      //concerning most of these values
+      SetLength(Tracks[TrackIdx].Lines, 1);
+
+      Tracks[TrackIdx].Lines[0].HighNote := -1;
+      Tracks[TrackIdx].Lines[0].LastLine := false;
+      Tracks[TrackIdx].Lines[0].BaseNote := High(Integer);
+      Tracks[TrackIdx].Lines[0].ScoreValue := 0;
+    end;
+  end;
 
   procedure RemoveEmptyLinesFromTrack(const TrackIdx: integer);
   var
@@ -674,8 +704,8 @@ begin
   CurrentTrack := 0;
 
   Mult              := 1; // accuracy of measurement of note
-  Rel[0]            := 0;
-  Rel[1]            := 0;
+  for TrackIndex := 0 to High(Rel) do
+    Rel[TrackIndex] := 0;
 
   try
     SongFile.Position := 0;
@@ -704,30 +734,11 @@ begin
       if (CurLine[1] = 'P') then
       begin
         Self.isDuet := true;
-        SetLength(Tracks, 2);
+        AddTracks(2); // more tracks are added when P3, P4, ... is found
         CurrentTrack := -1;
       end
       else
-        SetLength(Tracks, 1);
-
-      for TrackIndex := 0 to High(Tracks) do
-      begin
-        Tracks[TrackIndex].High := 0;
-        Tracks[TrackIndex].Number := 1;
-        Tracks[TrackIndex].CurrentLine := 0;
-        Tracks[TrackIndex].NotesGAP   := self.NotesGAP;
-        Tracks[TrackIndex].ScoreValue := 0;
-
-        //Add first line and set some standard values to fields
-        //see procedure NewSentence for further explantation
-        //concerning most of these values
-        SetLength(Tracks[TrackIndex].Lines, 1);
-
-        Tracks[TrackIndex].Lines[0].HighNote := -1;
-        Tracks[TrackIndex].Lines[0].LastLine := false;
-        Tracks[TrackIndex].Lines[0].BaseNote := High(Integer);
-        Tracks[TrackIndex].Lines[0].ScoreValue := 0;
-      end;
+        AddTracks(1);
 
       while true do
       begin
@@ -753,29 +764,17 @@ begin
           else
             Param1 := StrToInt(CurLine[2]);
 
-          if (Param1 = 1) then
+          if (Param1 < 1) or (Param1 > MAX_SONG_TRACKS) then
           begin
-            if not(DuetChange) then
-              CurrentTrack := 0
-            else
-              CurrentTrack := 1
-          end
-          else
-          begin
-            if (Param1 = 2) then
-            begin
-              if not(DuetChange) then
-                CurrentTrack := 1
-              else
-                CurrentTrack := 0;
-            end
-            else
-            begin
-              Log.LogError('Wrong P-Number in file: "' + FileName.ToNative + '"; Line '+IntToStr(FileLineNo)+' (LoadSong)');
-              Result := False;
-              Exit;
-            end;
+            Log.LogError('Wrong P-Number in file: "' + FileName.ToNative + '"; Line '+IntToStr(FileLineNo)+
+              ' (P1 to P' + IntToStr(MAX_SONG_TRACKS) + ' are supported) (LoadSong)');
+            Result := False;
+            Exit;
           end;
+
+          CurrentTrack := Param1 - 1;
+          if (CurrentTrack > High(Tracks)) then
+            AddTracks(CurrentTrack + 1);
         end;
 
         if (Param0 = 'E') then
@@ -897,6 +896,17 @@ begin
     NextTrack: ;
   end;
 
+  // DuetChange: each player sings the next track (P2, P3, ..., P1)
+  if DuetChange and (Length(Tracks) > 1) then
+  begin
+    FirstTrack := Tracks[0];
+    for TrackIndex := 0 to High(Tracks) - 1 do
+      Tracks[TrackIndex] := Tracks[TrackIndex + 1];
+    Tracks[High(Tracks)] := FirstTrack;
+  end;
+
+  TrackCount := Length(Tracks);
+
   Result := true;
 end;
 
@@ -944,6 +954,30 @@ var
         Result := UpCase(S[P]);
         Exit;
       end;
+    end;
+  end;
+
+  { returns the highest track marker (P2, P3, ...) of the remaining lines
+    of a duet without parsing the notes }
+  function ScanTrackCount(): integer;
+  var
+    ScanLine: string;
+    TrackNumber: integer;
+  begin
+    Result := 2;
+    while SongFile.ReadLine(ScanLine) do
+    begin
+      ScanLine := Trim(ScanLine);
+      if (Length(ScanLine) < 2) or (ScanLine[1] <> 'P') then
+        Continue;
+
+      if (ScanLine[2] = ' ') then
+        TrackNumber := StrToIntDef(Copy(ScanLine, 3, 1), 0)
+      else
+        TrackNumber := StrToIntDef(ScanLine[2], 0);
+
+      if (TrackNumber > Result) and (TrackNumber <= MAX_SONG_TRACKS) then
+        Result := TrackNumber;
     end;
   end;
 
@@ -1110,7 +1144,10 @@ begin
     // Lightweight duet detection for song list: if the first non-header
     // note-section line starts with a P-track marker, this is a duet.
     if GetFirstNonWhitespaceChar(Line) = 'P' then
+    begin
       Self.isDuet := true;
+      Self.TrackCount := ScanTrackCount();
+    end;
 
     //Read the songs attributes stored in the TagMap
 
@@ -1403,48 +1440,29 @@ begin
         self.CalcMedley := false;
     end;
 
-    // Duet Singer Name P1
-    if (TagMapTryGetData('DUETSINGERP1', Value)) then
+    // Duet Singer Names P1, P2, P3, ...
+    for I := 1 to MAX_SONG_TRACKS do
     begin
-      if FormatVersion.MaxVersion(1,0,0,false) then
+      if (TagMapTryGetData('DUETSINGERP' + IntToStr(I), Value)) then
       begin
-        RemoveTagsFromTagMap('DUETSINGERP1');
-        DecodeStringUTF8(Value, DuetNames[0], Encoding);
-      end
-      else
-      begin
-        Log.LogInfo('Ignoring DUETSINGERP1 header in file "' + FullFileName + '" (deprecated in Format 1.0.0)', 'TSong.ReadTXTHeader');
-        RemoveTagsFromTagMap('DUETSINGERP1', false);
+        if FormatVersion.MaxVersion(1,0,0,false) then
+        begin
+          RemoveTagsFromTagMap('DUETSINGERP' + IntToStr(I));
+          DecodeStringUTF8(Value, DuetNames[I-1], Encoding);
+        end
+        else
+        begin
+          Log.LogInfo('Ignoring DUETSINGERP' + IntToStr(I) + ' header in file "' + FullFileName + '" (deprecated in Format 1.0.0)', 'TSong.ReadTXTHeader');
+          RemoveTagsFromTagMap('DUETSINGERP' + IntToStr(I), false);
+        end;
       end;
-    end;
 
-    // Duet Singer Name P2
-    if (TagMapTryGetData('DUETSINGERP2', Value)) then
-    begin
-      if FormatVersion.MaxVersion(1,0,0,false) then
+      // P1, P2, ... take precedence over DUETSINGERP1, DUETSINGERP2, ...
+      if (TagMapTryGetData('P' + IntToStr(I), Value)) then
       begin
-        RemoveTagsFromTagMap('DUETSINGERP2');
-        DecodeStringUTF8(Value, DuetNames[1], Encoding);
-      end
-      else
-      begin
-        Log.LogInfo('Ignoring DUETSINGERP2 header in file "' + FullFileName + '" (deprecated in Format 1.0.0)', 'TSong.ReadTXTHeader');
-        RemoveTagsFromTagMap('DUETSINGERP2', false);
+        RemoveTagsFromTagMap('P' + IntToStr(I));
+        DecodeStringUTF8(Value, DuetNames[I-1], Encoding);
       end;
-    end;
-
-    // Duet Singer Name P1
-    if (TagMapTryGetData('P1', Value)) then
-    begin
-      RemoveTagsFromTagMap('P1');
-      DecodeStringUTF8(Value, DuetNames[0], Encoding);
-    end;
-
-    // Duet Singer Name P2
-    if (TagMapTryGetData('P2', Value)) then
-    begin
-      RemoveTagsFromTagMap('P2');
-      DecodeStringUTF8(Value, DuetNames[1], Encoding);
     end;
 
     // Unsupported Tags
@@ -1907,6 +1925,8 @@ begin
 end;
 
 procedure TSong.Clear();
+var
+  TrackIndex: integer;
 begin
   FMD5 := '';
   FMD5Cached := false;
@@ -1949,10 +1969,11 @@ begin
   Medley.Source := msNone;
 
   isDuet := false;
+  TrackCount := 1;
 
-  SetLength(DuetNames, 2);
-  DuetNames[0] := 'P1';
-  DuetNames[1] := 'P2';
+  SetLength(DuetNames, MAX_SONG_TRACKS);
+  for TrackIndex := 0 to High(DuetNames) do
+    DuetNames[TrackIndex] := 'P' + IntToStr(TrackIndex + 1);
 
   Relative := false;
 end;

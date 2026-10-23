@@ -283,7 +283,7 @@ begin
 
   PetGr := 0;
   if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
-    PetGr := 1;
+    PetGr := Min(CurrentSong.TrackCount, PlayersPlay) - 1;
 
   // sentences routines
   for CountGr := 0 to PetGr do //High(Tracks)
@@ -349,7 +349,7 @@ begin
   // clean note of player
   for I := 0 to High(Player) do
   begin
-    if (not CurrentSong.isDuet) or (I mod 2 = CP) then
+    if (not CurrentSong.isDuet) or (I mod CurrentSong.TrackCount = CP) then
     begin
       Player[I].LengthNote := 0;
       Player[I].HighNote := -1;
@@ -408,7 +408,7 @@ begin
 
   MaxCP := 0;
   if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
-    MaxCP := 1;
+    MaxCP := Min(CurrentSong.TrackCount, PlayersPlay) - 1;
 
   if (assigned(Screen)) then
   begin
@@ -483,7 +483,7 @@ begin
     // analyze player signals
     for PlayerIndex := 0 to PlayersPlay-1 do
     begin
-      if (not CurrentSong.isDuet) or (PlayerIndex mod 2 = CP) then
+      if (not CurrentSong.isDuet) or (PlayerIndex mod CurrentSong.TrackCount = CP) then
       begin
         // check for an active note at the current time defined in the lyrics
         NoteAvailable := false;

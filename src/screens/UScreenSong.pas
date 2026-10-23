@@ -2196,6 +2196,15 @@ end;
 procedure TScreenSong.SetScroll;
 var
   VS, B, SongsInCat: integer;
+  FirstPlayer: integer;
+  // name of the track sung by the player with the given index (0-based)
+  function DuetName(PlayerIndex: integer): UTF8String;
+  begin
+    if (DuetChange) then
+      Inc(PlayerIndex);
+    Result := CatSongs.Song[Interaction].DuetNames[PlayerIndex mod CatSongs.Song[Interaction].TrackCount];
+  end;
+
   procedure HideDuetElements;
   begin
     Text[Text2PlayersDuetSingerP1].Visible := false;
@@ -2296,69 +2305,21 @@ begin
       end;
 
       // Set duet texts
-      if (DuetChange) then
+      if (PlayersPlay = 3) or (PlayersPlay = 6) then
       begin
-        if (PlayersPlay = 3) or (PlayersPlay = 6) then
-        begin
-          if (PlayersPlay = 3) then
-          begin
-            Text[Text3PlayersDuetSingerP1].Text := CatSongs.Song[Interaction].DuetNames[1];
-            Text[Text3PlayersDuetSingerP2].Text := CatSongs.Song[Interaction].DuetNames[0];
-            Text[Text3PlayersDuetSingerP3].Text := CatSongs.Song[Interaction].DuetNames[1];
-          end
-          else
-          begin
-            if (ScreenAct = 1) then
-            begin
-              Text[Text3PlayersDuetSingerP1].Text := CatSongs.Song[Interaction].DuetNames[1];
-              Text[Text3PlayersDuetSingerP2].Text := CatSongs.Song[Interaction].DuetNames[0];
-              Text[Text3PlayersDuetSingerP3].Text := CatSongs.Song[Interaction].DuetNames[1];
-            end
-            else
-            begin
-              Text[Text3PlayersDuetSingerP1].Text := CatSongs.Song[Interaction].DuetNames[0];
-              Text[Text3PlayersDuetSingerP2].Text := CatSongs.Song[Interaction].DuetNames[1];
-              Text[Text3PlayersDuetSingerP3].Text := CatSongs.Song[Interaction].DuetNames[0];
-            end;
-          end;
-        end
+        // 6 players: screen 2 shows players 4 to 6
+        if (PlayersPlay = 6) and (ScreenAct = 2) then
+          FirstPlayer := 3
         else
-        begin
-          Text[Text2PlayersDuetSingerP1].Text := CatSongs.Song[Interaction].DuetNames[1];
-          Text[Text2PlayersDuetSingerP2].Text := CatSongs.Song[Interaction].DuetNames[0];
-        end;
+          FirstPlayer := 0;
+        Text[Text3PlayersDuetSingerP1].Text := DuetName(FirstPlayer);
+        Text[Text3PlayersDuetSingerP2].Text := DuetName(FirstPlayer + 1);
+        Text[Text3PlayersDuetSingerP3].Text := DuetName(FirstPlayer + 2);
       end
       else
       begin
-        if (PlayersPlay = 3) or (PlayersPlay = 6) then
-        begin
-          if (PlayersPlay = 3) then
-          begin
-            Text[Text3PlayersDuetSingerP1].Text := CatSongs.Song[Interaction].DuetNames[0];
-            Text[Text3PlayersDuetSingerP2].Text := CatSongs.Song[Interaction].DuetNames[1];
-            Text[Text3PlayersDuetSingerP3].Text := CatSongs.Song[Interaction].DuetNames[0];
-          end
-          else
-          begin
-            if (ScreenAct = 1) then
-            begin
-              Text[Text3PlayersDuetSingerP1].Text := CatSongs.Song[Interaction].DuetNames[0];
-              Text[Text3PlayersDuetSingerP2].Text := CatSongs.Song[Interaction].DuetNames[1];
-              Text[Text3PlayersDuetSingerP3].Text := CatSongs.Song[Interaction].DuetNames[0];
-            end
-            else
-            begin
-              Text[Text3PlayersDuetSingerP1].Text := CatSongs.Song[Interaction].DuetNames[1];
-              Text[Text3PlayersDuetSingerP2].Text := CatSongs.Song[Interaction].DuetNames[0];
-              Text[Text3PlayersDuetSingerP3].Text := CatSongs.Song[Interaction].DuetNames[1];
-            end;
-          end;
-        end
-        else
-        begin
-          Text[Text2PlayersDuetSingerP1].Text := CatSongs.Song[Interaction].DuetNames[0];
-          Text[Text2PlayersDuetSingerP2].Text := CatSongs.Song[Interaction].DuetNames[1];
-        end;
+        Text[Text2PlayersDuetSingerP1].Text := DuetName(0);
+        Text[Text2PlayersDuetSingerP2].Text := DuetName(1);
       end;
     end;
     //Set Song Score
@@ -4206,6 +4167,15 @@ end;
 
 procedure TScreenSong.OpenEditor;
 begin
+  // the editor handles solo songs and duets only, saving would lose P3, P4, ...
+  if (Songs.SongList.Count > 0) and
+     (not CatSongs.Song[Interaction].Main) and
+     (CatSongs.Song[Interaction].TrackCount > 2) then
+  begin
+    ScreenPopupError.ShowPopup(Language.Translate('ERROR_MULTI_TRACK_NOT_EDITABLE'));
+    Exit;
+  end;
+
   if (Songs.SongList.Count > 0) and
      (not CatSongs.Song[Interaction].Main) and
      // currently, the editor is not suitable to edit duets
