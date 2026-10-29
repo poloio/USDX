@@ -150,8 +150,24 @@ the notes.
 
 ## Song editor
 
-The song editor does not open a song with more than two parts. It shows a message. This prevents a save
-that removes parts `P3` to `P6`. When the song editor saves a duet, it writes a `#Pn` header for each part.
+The song editor opens, changes, and saves songs with up to six parts. It saves all parts, with a `#Pn`
+header for each part. The keys for duets also work for more parts:
+
+| Keys | Function |
+|---|---|
+| <kbd>Ctrl</kbd>+<kbd>Down</kbd>, <kbd>Ctrl</kbd>+<kbd>Up</kbd> | Go to the next part, go to the previous part. |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Down</kbd>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Up</kbd> | Copy the current line into the next part, into the previous part. |
+| <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Down</kbd>, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Up</kbd> | Move the current line into the next part, into the previous part. |
+
+The keys do not go past the first part or the last part. For a duet, the keys work as before.
+
+The header and the info bars below the notes have space for two parts. They show the pair of parts that
+contains the current part: `P1` and `P2`, `P3` and `P4`, or `P5` and `P6`. With 3 or 5 parts, the last
+part shows with the part before it. To change the name of a part, go to the part, then change the name in
+the header.
+
+The song editor cannot add a part to a song with parts, or remove one part. As for duets,
+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> keeps only the current part and makes a solo song.
 
 ## Other game modes
 
@@ -183,10 +199,11 @@ The changes are in these units:
 | `src/screens/controllers/UScreenSingController.pas` | `LoadNextSong` sets `Player[N].Track` from the song list. One lyric engine for each part (`LyricsDuet`), not two. `GetShownTracks` gives the parts whose lines the game follows. `TrackSinger` gives the player whose color a part gets. `OnSentenceEnd` calculates the line bonus for each part. |
 | `src/screens/views/UScreenSingView.pas` | `SetDuetLyricsLayout` places the lyrics of each part near the note rows of its players. `SetDuetLyricsColors` sets the color of each part for the current screen. |
 | `src/base/UDraw.pas` | Draws the lyrics of each part, the note rows of each player's part, and the color marks. |
-| `src/screens/UScreenSong.pas` | `PlayerTracks`, changed with <kbd>Space</kbd> and <kbd>1</kbd> to <kbd>6</kbd>, replaces `DuetChange`. The part name of each player. The layout for 4 players and 3 or more parts. The song editor check. |
+| `src/screens/UScreenSong.pas` | `PlayerTracks`, changed with <kbd>Space</kbd> and <kbd>1</kbd> to <kbd>6</kbd>, replaces `DuetChange`. The part name of each player. The layout for 4 players and 3 or more parts. |
+| `src/screens/UScreenEditSub.pas` | The editor keeps the current note and the lyrics of each part. The keys go to, copy to, and move to the next or previous part. `ShownTrack` gives the two parts that the header and the info bars show. |
 | `src/base/UFiles.pas` | Writes a `#Pn` header for each part. |
 | `src/base/UDataBase.pas` | The number of parts for highscores comes from `TrackCount`. |
-| `game/languages` | The message `ERROR_MULTI_TRACK_NOT_EDITABLE`. |
+| `game/languages/English.ini` | The help text of the editor keys for parts. |
 
 The score database did not change. It already keeps the number of parts (`TrackCount`) and the part of
 each score (`TrackMask`).
@@ -202,10 +219,13 @@ The tests used automatic runs of the game without a visible window (Xvfb), with 
 - The Modern theme and the Deluxe theme.
 - A duet song with 2, 3, and 4 players, and with the duet swap.
 - A solo song with 1 and 3 players.
-- The song editor message for a song with 3 parts.
+- The song editor with songs with 3 and 6 parts: go to each part, change a note and a part name, copy and
+  move lines, undo, and save.
+- The song editor with a duet and a solo song: the same keys and the save.
 
 The tests compared the duet and solo screens with the screens of the unmodified game (upstream master of
-2026-10-29). They were the same, except for the color marks of duets with 3 or more players.
+2026-10-29). They were the same, except for the color marks of duets with 3 or more players. The song
+editor saved the same duet and solo files as the unmodified editor.
 
 These items were not tested: scores with real microphones (the automatic runs have no microphone input),
 two screens, and macOS.
