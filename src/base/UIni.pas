@@ -151,6 +151,7 @@ type
       Sorting:        integer;
       ShowScores:     integer;
       ShowWebScore:   integer;
+      ReadyCheck:     integer; // before a song with 2+ players, each player sings into their mic to start
       Debug:          integer;
       AVDelay:        integer;
       MicDelay:       integer;
@@ -203,6 +204,7 @@ type
       LyricsStyle:    integer;
       LyricsEffect:   integer;
       NoteLines:      integer;
+      PartCues:       integer; // lyrics of songs with parts: 0 off, 1 cue before a part's turn, 2 dim idle parts, 3 both
 
       // Themes
       Theme:          integer;
@@ -311,6 +313,7 @@ type
       procedure SaveWebcamSettings();
       procedure SaveNumberOfPlayers;
       procedure SaveSingTimebarMode;
+      procedure SavePartCues;
       procedure SaveJukeboxTimebarMode;
 
       procedure TranslateOptionValues;
@@ -362,6 +365,8 @@ type
 
 const
   IShowScores:       array[0..2] of UTF8String  = ('Off', 'When exists', 'On');
+
+  IReadyCheck:       array[0..1] of UTF8String  = ('Off', 'On');
 
   IDebug:            array[0..1] of UTF8String  = ('Off', 'On');
 
@@ -424,6 +429,7 @@ const
                                               0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.00);
 
   INoteLines:     array[0..1] of UTF8String = ('Off', 'On');
+  IPartCues:      array[0..3] of UTF8String = ('Off', 'YourTurn', 'DimIdle', 'Both');
 
   // for lyric colors
   ILine:             array[0..2] of UTF8String = ('Sing', 'Actual', 'Next');
@@ -494,6 +500,8 @@ var
 
   IShowScoresTranslated:       array[0..2] of UTF8String  = ('Off', 'WhenExists', 'On');
 
+  IReadyCheckTranslated:       array[0..1] of UTF8String  = ('Off', 'On');
+
   IDebugTranslated:            array[0..1] of UTF8String  = ('Off', 'On');
   IAVDelay:                    array of UTF8String;
   IMicDelay:                   array of UTF8String;
@@ -534,6 +542,7 @@ var
   ILyricsStyleTranslated:      array[0..2] of UTF8String = ('Regular', 'Bold', 'Outline');
   ILyricsEffectTranslated:     array[0..4] of UTF8String = ('Simple', 'Zoom', 'Slide', 'Ball', 'Shift');
   INoteLinesTranslated:        array[0..1] of UTF8String = ('Off', 'On');
+  IPartCuesTranslated:         array[0..3] of UTF8String = ('Off', 'Your turn', 'Dim idle', 'Both');
   IColorTranslated:            array[0..8] of UTF8String = ('Blue', 'Green', 'Pink', 'Red', 'Violet', 'Orange', 'Yellow', 'Brown', 'Black');
   IPlayerColorTranslated:      array[0..15] of UTF8String = ('Blue', 'Red', 'Green', 'Yellow', 'Orange', 'Pink',  'Violet', 'Brown', 'Gray', 'Dark Blue', 'Sky', 'Cyan', 'Flame', 'Orchid', 'Harlequin', 'Lime');
 
@@ -708,6 +717,9 @@ begin
   IShowScoresTranslated[1]            := ULanguage.Language.Translate('OPTION_VALUE_WHENEXIST');
   IShowScoresTranslated[2]            := ULanguage.Language.Translate('OPTION_VALUE_ON');
 
+  IReadyCheckTranslated[0]            := ULanguage.Language.Translate('OPTION_VALUE_OFF');
+  IReadyCheckTranslated[1]            := ULanguage.Language.Translate('OPTION_VALUE_ON');
+
   IDebugTranslated[0]                 := ULanguage.Language.Translate('OPTION_VALUE_OFF');
   IDebugTranslated[1]                 := ULanguage.Language.Translate('OPTION_VALUE_ON');
 
@@ -773,6 +785,11 @@ begin
 
   INoteLinesTranslated[0]             := ULanguage.Language.Translate('OPTION_VALUE_OFF');
   INoteLinesTranslated[1]             := ULanguage.Language.Translate('OPTION_VALUE_ON');
+
+  IPartCuesTranslated[0]              := ULanguage.Language.Translate('OPTION_VALUE_OFF');
+  IPartCuesTranslated[1]              := ULanguage.Language.Translate('OPTION_VALUE_YOURTURN');
+  IPartCuesTranslated[2]              := ULanguage.Language.Translate('OPTION_VALUE_DIMIDLE');
+  IPartCuesTranslated[3]              := ULanguage.Language.Translate('OPTION_VALUE_BOTH');
 
   for I := 0 to 255 do
   begin
@@ -1569,6 +1586,9 @@ begin
   // Show Score
   ShowScores := ReadArrayIndex(IShowScores, IniFile, 'Game', 'ShowScores', IGNORE_INDEX, 'On');
 
+  // Ready Check
+  ReadyCheck := ReadArrayIndex(IReadyCheck, IniFile, 'Game', 'ReadyCheck', IGNORE_INDEX, 'On');
+
   AVDelay := IniFile.ReadInteger('Game', 'AVDelay', 0);
 
   MicDelay := IniFile.ReadInteger('Game', 'MicDelay', 140);
@@ -1665,6 +1685,9 @@ begin
 
   // NoteLines
   NoteLines := ReadArrayIndex(INoteLines, IniFile, 'Lyrics', 'NoteLines', 1);
+
+  // PartCues
+  PartCues := ReadArrayIndex(IPartCues, IniFile, 'Lyrics', 'PartCues', IGNORE_INDEX, 'Both');
 
   // DefaultEncoding
   DefaultEncoding := ParseEncoding(IniFile.ReadString('Lyrics', 'Encoding', ''), encAuto);
@@ -1899,6 +1922,9 @@ begin
     // Show Scores
     IniFile.WriteString('Game', 'ShowScores', IShowScores[ShowScores]);
 
+    // Ready Check
+    IniFile.WriteString('Game', 'ReadyCheck', IReadyCheck[ReadyCheck]);
+
     // Debug
     IniFile.WriteString('Game', 'Debug', IDebug[Debug]);
 
@@ -1994,6 +2020,9 @@ begin
 
     // NoteLines
     IniFile.WriteString('Lyrics', 'NoteLines', INoteLines[NoteLines]);
+
+    // PartCues
+    IniFile.WriteString('Lyrics', 'PartCues', IPartCues[PartCues]);
 
     //Encoding default
     IniFile.WriteString('Lyrics', 'Encoding', EncodingName(DefaultEncoding));
@@ -2339,6 +2368,18 @@ begin
   try
     // Players
     IniFile.WriteString('Advanced', 'SingTimebarMode', ISingTimebarMode[SingTimebarMode]);
+  finally
+    IniFile.Free;
+  end;
+end;
+
+procedure TIni.SavePartCues;
+var
+  IniFile: TIniFile;
+begin
+  IniFile := TSafeIniFile.Create(Filename.ToNative, 'TIni.SavePartCues');
+  try
+    IniFile.WriteString('Lyrics', 'PartCues', IPartCues[PartCues]);
   finally
     IniFile.Free;
   end;

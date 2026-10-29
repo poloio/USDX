@@ -83,10 +83,23 @@ type
     procedure ClearLyricEngines();
     procedure CalculateStartTime;
     procedure SaveLocalScores;
+    procedure StartReadyCheck;
+    procedure StartMusic;
   public
     CheckPlayerConfigOnNextSong: boolean;
     eSongLoaded: THookableEvent; //< event is called after lyrics of a song are loaded on OnShow
     Paused:     boolean; //pause Mod
+
+    // ready check before the song starts: each player sings into their mic or presses their number
+    ReadyCheck:     boolean;
+    ReadyHasMic:    array [0..IMaxPlayerCount-1] of boolean;
+    ReadyPlayer:    array [0..IMaxPlayerCount-1] of boolean;
+    ReadyVoiceTime: array [0..IMaxPlayerCount-1] of cardinal; // ms the player sang a tone
+    ReadyLevel:     array [0..IMaxPlayerCount-1] of real;     // mic level for the meter
+    ReadyTime:      array [0..IMaxPlayerCount-1] of cardinal; // SDL ticks when the player got ready
+    ReadyAllTime:   cardinal; // SDL ticks when all players were ready, 0 before
+    ReadyLastTicks: cardinal;
+
     NumEmptySentences: array [0..MAX_SONG_TRACKS-1] of integer;
     // views
     fShowVisualization: boolean;
@@ -189,6 +202,8 @@ type
     procedure OnSentenceChange(Track: integer; SentenceIndex: cardinal);  // for golden notes
     procedure GetShownTracks(out FirstTrack, LastTrack: integer);
     function TrackSinger(Track: integer): integer;
+    procedure UpdateReadyCheck;
+    procedure SetPlayerReady(PlayerIndex: integer);
     property CountIn: boolean read fCountIn write fCountIn;
     property FirstNote: real read fFirstNote;
   end;
@@ -198,6 +213,9 @@ var screenSingViewRef: TScreenSingView;
 
 const
   ID='ID_022';   //for help system
+
+  READY_VOICE_TIME = 400;  // ms a player sings a tone to be ready
+  READY_COUNTDOWN  = 3000; // ms from all players ready to the start of the song
 
 implementation
 
@@ -244,6 +262,31 @@ begin
 
     SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT
     + KMOD_LCTRL + KMOD_RCTRL + KMOD_LALT  + KMOD_RALT);
+
+    // ready check: number keys get a player ready, Enter starts now, Esc goes back to the song list
+    if ReadyCheck then
+    begin
+      case PressedKey of
+        SDLK_ESCAPE,
+        SDLK_BACKSPACE:
+        begin
+          ReadyCheck := false;
+          // FadeOut stops the view from finishing the song (score screen) while the screen fades
+          FadeOut := true;
+          AudioInput.CaptureStop;
+          AudioPlayback.Stop;
+          FadeTo(@ScreenSong, SoundLib.Back);
+        end;
+        SDLK_RETURN,
+        SDLK_SPACE:
+          StartMusic;
+        SDLK_1..SDLK_6:
+          SetPlayerReady(PressedKey - SDLK_1);
+        SDLK_KP_1..SDLK_KP_6:
+          SetPlayerReady(PressedKey - SDLK_KP_1);
+      end;
+      Exit;
+    end;
 
     // check normal keys
     case PressedKey of
@@ -561,6 +604,14 @@ begin
         Pause;
       end;
 
+      // part cues: off, your turn, dim idle parts, both
+      SDLK_C:
+      begin
+        Ini.PartCues := (Ini.PartCues + 1) mod Length(IPartCues);
+        Ini.SavePartCues;
+        screenSingViewRef.WriteMessage(Format(Language.Translate('SING_PARTCUES_CHANGED'), [IPartCuesTranslated[Ini.PartCues]]));
+      end;
+
       SDLK_K:
       begin
         AudioPlayback.ToggleKaraoke;
@@ -825,6 +876,7 @@ begin
 
   // deactivate pause
   Paused := false;
+  ReadyCheck := false;
 
   LoadNextSong();
 
@@ -892,6 +944,20 @@ begin
   else
     LyricsState.SetSyncSource(nil);
 
+  // Send Score
+  Act_MD5Song := CurrentSong.MD5;
+
+  // with 2 or more players the song starts when all players are ready
+  if (Ini.ReadyCheck = 1) and (PlayersPlay > 1) and (ScreenSong.Mode = smNormal) then
+    StartReadyCheck
+  else
+    StartMusic;
+end;
+
+procedure TScreenSingController.StartMusic;
+begin
+  ReadyCheck := false;
+
   // start lyrics
   LyricsState.Start(true);
 
@@ -901,12 +967,77 @@ begin
   else
     AudioPlayback.Play();
 
-  // Send Score
-  Act_MD5Song := CurrentSong.MD5;
-
   // start timer
   CountSkipTimeSet;
+end;
 
+procedure TScreenSingController.StartReadyCheck;
+var
+  PlayerState: TBooleanDynArray;
+  PlayerIndex: integer;
+begin
+  AudioInputProcessor.CheckPlayersConfig(PlayersPlay, PlayerState);
+  for PlayerIndex := 0 to PlayersPlay - 1 do
+  begin
+    ReadyHasMic[PlayerIndex] := PlayerState[PlayerIndex] and (PlayerIndex <= High(AudioInputProcessor.Sound));
+    ReadyPlayer[PlayerIndex] := false;
+    ReadyVoiceTime[PlayerIndex] := 0;
+    ReadyLevel[PlayerIndex] := 0;
+    ReadyTime[PlayerIndex] := 0;
+  end;
+  ReadyAllTime := 0;
+  ReadyLastTicks := SDL_GetTicks();
+  ReadyCheck := true;
+end;
+
+{ called every frame during the ready check: a player is ready after singing a tone
+  for READY_VOICE_TIME, the song starts READY_COUNTDOWN after all players are ready }
+procedure TScreenSingController.UpdateReadyCheck;
+var
+  PlayerIndex: integer;
+  Ticks:       cardinal;
+  Delta:       cardinal;
+  AllReady:    boolean;
+  Sound:       TCaptureBuffer;
+begin
+  Ticks := SDL_GetTicks();
+  Delta := Ticks - ReadyLastTicks;
+  ReadyLastTicks := Ticks;
+
+  AllReady := true;
+  for PlayerIndex := 0 to PlayersPlay - 1 do
+  begin
+    if ReadyHasMic[PlayerIndex] then
+    begin
+      Sound := AudioInputProcessor.Sound[PlayerIndex];
+      Sound.AnalyzeBuffer;
+      // the meter follows the voice up at once and falls slowly
+      ReadyLevel[PlayerIndex] := Max(Sound.MaxSampleVolume, ReadyLevel[PlayerIndex] - Delta / 1000);
+      if Sound.ToneValid and not ReadyPlayer[PlayerIndex] then
+      begin
+        Inc(ReadyVoiceTime[PlayerIndex], Delta);
+        if (ReadyVoiceTime[PlayerIndex] >= READY_VOICE_TIME) then
+          SetPlayerReady(PlayerIndex);
+      end;
+    end;
+    AllReady := AllReady and ReadyPlayer[PlayerIndex];
+  end;
+
+  if AllReady and (ReadyAllTime = 0) then
+    ReadyAllTime := Ticks;
+
+  if (ReadyAllTime > 0) and (Ticks - ReadyAllTime >= READY_COUNTDOWN) then
+    StartMusic;
+end;
+
+procedure TScreenSingController.SetPlayerReady(PlayerIndex: integer);
+begin
+  if (PlayerIndex < 0) or (PlayerIndex >= PlayersPlay) or ReadyPlayer[PlayerIndex] then
+    Exit;
+
+  ReadyPlayer[PlayerIndex] := true;
+  ReadyTime[PlayerIndex] := SDL_GetTicks();
+  AudioPlayback.PlaySound(SoundLib.Option);
 end;
 
 procedure TScreenSingController.SongError();
@@ -1281,6 +1412,8 @@ begin
 
   eSongLoaded.CallHookChain(False);
 
+  screenSingViewRef.ResetPartCues;
+
   if (ScreenSong.Mode = smMedley) and (PlaylistMedley.CurrentMedleySong>1) then
     onShowFinish;
 end;
@@ -1559,6 +1692,9 @@ begin
   Text[screenSingViewRef.TextP4DuetSixP].Visible   := V4DuetSixP and ScreenSing.Settings.AvatarsVisible;
   Text[screenSingViewRef.TextP5DuetSixP].Visible   := V5DuetSixP and ScreenSing.Settings.AvatarsVisible;
   Text[screenSingViewRef.TextP6DuetSixP].Visible   := V6DuetSixP and ScreenSing.Settings.AvatarsVisible;
+
+  if ReadyCheck then
+    UpdateReadyCheck;
 
   Result := screenSingViewRef.Draw();
 end;

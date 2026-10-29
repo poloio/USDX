@@ -11,6 +11,8 @@ official release.
 - The song list shows the part of each player. <kbd>Space</kbd> in the song list rotates the parts of all players. The keys <kbd>1</kbd> to <kbd>6</kbd> give that player the next part, so players can choose their part.
 - The lyrics of each part show near the notes of its singers, also with 4 and 6 players.
 - Parts that nobody sings show in gray, without a score.
+- Ready check: with 2 or more players, each player sings a note into their microphone (or presses their number) before the song starts. A panel over each note row shows the avatar, color, and part of the player.
+- Part cues: before a part sings again after a pause, its lyrics light up in the color of its player. Parts that do not sing for a while fade out. <kbd>C</kbd> during the song changes the cues.
 - The song editor opens, edits, and saves songs with 3 to 6 parts.
 - Fixed: the song editor crashed on undo after switching duet parts. Songs with an empty line after the header showed as solo songs in the song list.
 - Solo songs and duet songs work as before.

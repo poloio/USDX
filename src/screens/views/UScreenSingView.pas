@@ -188,6 +188,13 @@ type
     SongNameStatic:   integer;
     SongNameText:     integer;
 
+    ReadyAvatars: array [0..IMaxPlayerCount-1] of TTexture; // copies of the player avatars for the ready check and the part cues
+
+    // part cues (Ini.PartCues) in songs with parts
+    CueAlpha:     array [0..MAX_SONG_TRACKS-1] of real; // "your turn" glow of each part
+    DimAlpha:     array [0..MAX_SONG_TRACKS-1] of real; // alpha of the lyrics of each part
+    CueLastTicks: cardinal;
+
 
 
     constructor Create;
@@ -212,11 +219,24 @@ type
 
     procedure SetDuetLyricsLayout;
     procedure SetDuetLyricsColors;
+
+    function GetPlayerRow(PlayerIndex: integer; out X, Y, W, H: real): boolean;
+    procedure CopyPlayerAvatars;
+    procedure DrawReadyCheck;
+
+    procedure ResetPartCues;
+    procedure GetTrackPause(Track: integer; out ToNext, Pause: real);
+    procedure DrawPartCues;
   end;
 var
   lastVolume: single;
 
 const
+  CUE_LEAD       = 2.5; // s before the next line of a part its "your turn" cue shows
+  CUE_MIN_PAUSE  = 4;   // s a part must pause to get a "your turn" cue
+  CUE_DIM_LEAD   = 3;   // s, parts that sing again later than this are dimmed
+  CUE_DIM_ALPHA  = 0.3; // alpha of the lyrics of dimmed parts
+
   LYRIC_HELPER_SPACE = 60; // space left of side by side lyrics for the lyric helper bar
   LYRIC_MARK_WIDTH   = 8;  // width of the color mark of a player next to the lyrics of their track
   LYRIC_MARK_SPACE   = 4;  // space between the lyrics and the marks and between two marks
@@ -674,7 +694,11 @@ begin
 end;
 
 destructor TScreenSingView.Destroy;
+var
+  PlayerIndex: integer;
 begin
+  for PlayerIndex := 0 to High(ReadyAvatars) do
+    FreeAndNil(ReadyAvatars[PlayerIndex]);
   UnloadSingScreenTextures;
   inherited;
 end;
@@ -909,12 +933,12 @@ begin
   //Medley Countdown
   if ScreenSong.Mode = smMedley then
     DrawMedleyCountdown;
-  if ScreenSing.CountIn then
+  if ScreenSing.CountIn and not ScreenSing.ReadyCheck then
     DrawCountIn;
 
   // check for music finish
   //Log.LogError('Check for music finish: ' + BoolToStr(Music.Finished) + ' ' + FloatToStr(LyricsState.CurrentTime*1000) + ' ' + IntToStr(CurrentSong.Finish));
-  if ScreenSing.ShowFinish then
+  if ScreenSing.ShowFinish and not ScreenSing.ReadyCheck then
   begin
     if (not ScreenSing.FinishedMusic) and (not medley_end or (ScreenSong.Mode <> smMedley)) and
        ((CurrentSong.Finish = 0) or
@@ -950,6 +974,9 @@ begin
   ScreenSing.Statics[StaticLyricsBar].Visible := ScreenSing.Settings.LyricsVisible;
   ScreenSing.Statics[StaticLyricsBarDuet].Visible := ScreenSing.Settings.LyricsVisible and (CurrentSong.isDuet) and (PlayersPlay <> 1);
   ScreenSing.Statics[StaticTimeBar].Visible := ScreenSing.Settings.TimeBarVisible;
+  // part cues are drawn behind the lyrics and set their alpha
+  if (CurrentSong.isDuet) and (PlayersPlay <> 1) and ScreenSing.Settings.LyricsVisible then
+    DrawPartCues;
   SingDraw;
 
   // goldennotestarstwinkle
@@ -960,6 +987,9 @@ begin
     ScreenSing.Scores.Draw;
 
   FadeMessage();
+
+  if ScreenSing.ReadyCheck then
+    DrawReadyCheck;
 
   // draw pausepopup
   // FIXME: this is a workaround that the static is drawn over the lyrics, lines, scores and effects
@@ -1472,6 +1502,455 @@ begin
     ScreenSing.LyricsDuet[TrackIndex].LineColor_act.R := Col.R;
     ScreenSing.LyricsDuet[TrackIndex].LineColor_act.G := Col.G;
     ScreenSing.LyricsDuet[TrackIndex].LineColor_act.B := Col.B;
+  end;
+end;
+
+
+{ the area of the note row of a player as SingDraw places it,
+  false if the player is on the other screen }
+function TScreenSingView.GetPlayerRow(PlayerIndex: integer; out X, Y, W, H: real): boolean;
+var
+  RowsPerScreen: integer;
+  Row:           integer;
+  Column:        integer; // -1: full width, 0: left half, 1: right half
+begin
+  Result := false;
+  X := 0;
+  Y := 0;
+  W := 0;
+  H := 0;
+  Column := -1;
+  if (PlayersPlay = 4) or (PlayersPlay = 6) then
+  begin
+    RowsPerScreen := PlayersPlay div 2;
+    Row := PlayerIndex mod RowsPerScreen;
+    if (Screens = 2) then
+    begin
+      if (PlayerIndex div RowsPerScreen <> ScreenAct - 1) then
+        Exit;
+    end
+    else
+      Column := PlayerIndex div RowsPerScreen;
+  end
+  else
+  begin
+    RowsPerScreen := PlayersPlay;
+    Row := PlayerIndex;
+  end;
+
+  if (RowsPerScreen = 3) then
+  begin
+    Y := 120 + Row * 125;
+    H := 9 * 12;
+  end
+  else if (RowsPerScreen = 2) then
+  begin
+    Y := Skin_P1_NotesB - 105 + Row * (Skin_P2_NotesB - Skin_P1_NotesB);
+    H := 9 * 15;
+  end
+  else
+  begin
+    Y := Skin_P2_NotesB - 105;
+    H := 9 * 15;
+  end;
+
+  case Column of
+    0: begin X := 40;  W := 330; end;
+    1: begin X := 410; W := 350; end;
+    else begin X := 40; W := 720; end;
+  end;
+  Result := true;
+end;
+
+{ copies the avatars of the players for the ready check and the part cues,
+  the avatars can change between songs }
+procedure TScreenSingView.CopyPlayerAvatars;
+var
+  PlayerIndex: integer;
+begin
+  for PlayerIndex := 0 to High(ReadyAvatars) do
+  begin
+    FreeAndNil(ReadyAvatars[PlayerIndex]);
+    if (AvatarPlayerTextures[PlayerIndex + 1] <> nil) and not AvatarPlayerTextures[PlayerIndex + 1].IsEmpty then
+    begin
+      ReadyAvatars[PlayerIndex] := AvatarPlayerTextures[PlayerIndex + 1].Clone();
+      ReadyAvatars[PlayerIndex].Reflection := false;
+    end;
+  end;
+end;
+
+{ draws a panel over the note row of each player with the avatar, name, part, mic meter
+  and whether the player is ready, the keys at the bottom and the countdown to the start }
+procedure TScreenSingView.DrawReadyCheck;
+var
+  PlayerIndex: integer;
+  X, Y, W, H:  real;
+  Col:         TRGB;
+  LightCol:    TRGB;
+  Ready:       boolean;
+  Ticks:       cardinal;
+  Pulse:       real;
+  Pop:         real;
+  Voice:       real;
+  Threshold:   real;
+  AvatarSize:  real;
+  Size:        real;
+  AvatarX:     real;
+  AvatarY:     real;
+  Avatar:      TTexture;
+  TextX:       real;
+  TextW:       real;
+  FontH:       real;
+  MeterY:      real;
+  MeterW:      real;
+  Remaining:   real;
+  Fade:        real;
+  Line:        UTF8String;
+
+  // prints Line at (PosX, PosY) with the font size Size, smaller if it is wider than MaxW
+  procedure PrintFitted(const Line: UTF8String; PosX, PosY, MaxW, Size: real);
+  begin
+    SetFontSize(Size);
+    if (TextWidth(Line) > MaxW) then
+      SetFontSize(Size * MaxW / TextWidth(Line));
+    SetFontPos(PosX, PosY);
+    PrintText(Line);
+  end;
+
+begin
+  Ticks := SDL_GetTicks();
+  Pulse := 0.5 + 0.5 * Sin(Ticks / 200);
+  Threshold := IThresholdVals[Ini.ThresholdIndex];
+
+  SetFontFamily(0);
+  SetFontItalic(false);
+  SetFontReflection(false, 0);
+  SetFontZ(0);
+
+  for PlayerIndex := 0 to PlayersPlay - 1 do
+  begin
+    if not GetPlayerRow(PlayerIndex, X, Y, W, H) then
+      Continue;
+
+    Ready := ScreenSing.ReadyPlayer[PlayerIndex];
+    Col := GetPlayerColor(Ini.SingColor[PlayerIndex]);
+    LightCol := GetPlayerLightColor(Ini.SingColor[PlayerIndex]);
+
+    // panel over the note row, lit in the player color when the player is ready
+    Renderer.DrawQuad(X, Y, 0, W, H, 0, 0, 0, 0.75);
+    if Ready then
+    begin
+      Renderer.DrawQuad(X, Y, 0, W, H, Col.R, Col.G, Col.B, 0.35);
+      Renderer.DrawBoundedBox(X, Y, X + W, Y + H, 0, 4, LightCol.R, LightCol.G, LightCol.B, 1);
+    end
+    else
+      Renderer.DrawBoundedBox(X, Y, X + W, Y + H, 0, 2 + 2 * Pulse, Col.R, Col.G, Col.B, 0.4 + 0.6 * Pulse);
+
+    // avatar: grows with the voice, pops when the player gets ready
+    Voice := Min(1.0, ScreenSing.ReadyLevel[PlayerIndex] / Max(2 * Threshold, 0.01));
+    Pop := 0;
+    if Ready then
+      Pop := Max(0.0, 1 - (Ticks - ScreenSing.ReadyTime[PlayerIndex]) / 400);
+    AvatarSize := H - 24;
+    Size := AvatarSize * (1 + 0.15 * Voice + 0.3 * Pop);
+    AvatarX := X + 12 + (AvatarSize - Size) / 2;
+    AvatarY := Y + (H - Size) / 2;
+    Avatar := ReadyAvatars[PlayerIndex];
+    if Assigned(Avatar) then
+    begin
+      Avatar.X := AvatarX;
+      Avatar.Y := AvatarY;
+      Avatar.Z := 0;
+      Avatar.W := Size;
+      Avatar.H := Size;
+      Avatar.Alpha := 1;
+      Renderer.DrawTexture(Avatar);
+    end
+    else
+      Renderer.DrawQuad(AvatarX, AvatarY, 0, Size, Size, Col.R, Col.G, Col.B, 0.8);
+    Renderer.DrawBoundedBox(AvatarX, AvatarY, AvatarX + Size, AvatarY + Size, 0, 3, Col.R, Col.G, Col.B, 1);
+
+    // name and part
+    TextX := X + AvatarSize + 28;
+    TextW := X + W - 12 - TextX;
+    FontH := H / 5;
+    SetFontStyle(ftBold);
+    SetFontColor(LightCol.R, LightCol.G, LightCol.B, 1);
+    PrintFitted(ScreenSing.PlayerNames[PlayerIndex + 1], TextX, Y + 6, TextW, FontH);
+    if CurrentSong.isDuet then
+    begin
+      SetFontColor(1, 1, 1, 0.85);
+      PrintFitted(Format(Language.Translate('SING_READY_PART'), [CurrentSong.DuetNames[Player[PlayerIndex].Track]]),
+        TextX, Y + 8 + FontH, TextW, FontH * 0.75);
+    end;
+
+    // ready, or how to get ready
+    if Ready then
+    begin
+      SetFontColor(LightCol.R, LightCol.G, LightCol.B, 1);
+      PrintFitted(Language.Translate('SING_READY'), TextX, Y + H - FontH * 1.5 - 8, TextW, FontH * 1.4 * (1 + 0.3 * Pop));
+    end
+    else if ScreenSing.ReadyHasMic[PlayerIndex] then
+    begin
+      SetFontColor(1, 1, 1, 0.7 + 0.3 * Pulse);
+      PrintFitted(Language.Translate('SING_READY_SING'), TextX, Y + H - FontH * 2 - 10, TextW, FontH * 0.9);
+
+      // mic meter, the mark is the volume the game needs to hear a tone
+      MeterY := Y + H - 18;
+      MeterW := TextW * 0.6;
+      Renderer.DrawQuad(TextX, MeterY, 0, MeterW, 8, 1, 1, 1, 0.15);
+      Renderer.DrawQuad(TextX, MeterY, 0, MeterW * Min(1.0, ScreenSing.ReadyLevel[PlayerIndex] / Max(4 * Threshold, 0.01)), 8, Col.R, Col.G, Col.B, 1);
+      Renderer.DrawQuad(TextX + MeterW / 4 - 1, MeterY - 3, 0, 2, 14, 1, 1, 1, 0.8);
+      SetFontColor(1, 1, 1, 0.6);
+      PrintFitted(Format(Language.Translate('SING_READY_OR_PRESS'), [PlayerIndex + 1]),
+        TextX + MeterW + 10, MeterY - FontH * 0.25, TextW - MeterW - 10, FontH * 0.6);
+    end
+    else
+    begin
+      SetFontColor(1, 1, 1, 0.7 + 0.3 * Pulse);
+      PrintFitted(Format(Language.Translate('SING_READY_NO_MIC'), [PlayerIndex + 1]), TextX, Y + H - FontH * 1.5 - 8, TextW, FontH * 0.9);
+    end;
+  end;
+
+  // keys, over the time bar
+  Renderer.DrawQuad(0, 576, 0, 800, 24, 0, 0, 0, 0.8);
+  SetFontStyle(ftBold);
+  SetFontColor(1, 1, 1, 0.9);
+  SetFontSize(16);
+  Line := Language.Translate('SING_READY_HINT');
+  SetFontPos(400 - TextWidth(Line) / 2, 579);
+  PrintText(Line);
+
+  // countdown when all players are ready
+  if (ScreenSing.ReadyAllTime > 0) then
+  begin
+    Remaining := (READY_COUNTDOWN - (Ticks - ScreenSing.ReadyAllTime)) / 1000;
+    if (Remaining > 0) then
+    begin
+      Fade := Frac(Remaining);
+      Line := IntToStr(Trunc(Remaining) + 1);
+      SetFontStyle(ftBoldHighRes);
+      SetFontSize(100 + 120 * Fade);
+      // dark shadow, so the number can be read over the lit panels
+      SetFontColor(0, 0, 0, 0.8 * Fade);
+      SetFontPos(400 - TextWidth(Line) / 2 + 4, 300 - (100 + 120 * Fade) / 2 + 4);
+      PrintText(Line);
+      SetFontColor(1, 1, 1, Fade);
+      SetFontPos(400 - TextWidth(Line) / 2, 300 - (100 + 120 * Fade) / 2);
+      PrintText(Line);
+    end;
+  end;
+end;
+
+
+{ called when a song is loaded: all lyrics visible, no cues }
+procedure TScreenSingView.ResetPartCues;
+var
+  Track: integer;
+begin
+  for Track := 0 to High(CueAlpha) do
+  begin
+    CueAlpha[Track] := 0;
+    DimAlpha[Track] := 1;
+    ScreenSing.LyricsDuet[Track].LineAlpha := 1;
+  end;
+  CueLastTicks := SDL_GetTicks();
+  CopyPlayerAvatars;
+end;
+
+{ ToNext: seconds until the next note of a track, 0 while one of its lines is sung,
+  a large value after its last note.
+  Pause: seconds between the previous note of the track and its next note, 0 while a line is sung }
+procedure TScreenSingView.GetTrackPause(Track: integer; out ToNext, Pause: real);
+const
+  NO_NOTE = 1000; // s, for no next or previous note
+var
+  Lines:       ^TLines;
+  LineIndex:   integer;
+  Beat:        real;
+  Now:         real;
+  NextBeat:    integer;
+  PrevEndBeat: integer;
+  HasNext:     boolean;
+  HasPrev:     boolean;
+
+  function LineEnd(Index: integer): integer;
+  begin
+    with Lines.Lines[Index] do
+      Result := Notes[High(Notes)].StartBeat + Notes[High(Notes)].Duration;
+  end;
+
+begin
+  ToNext := NO_NOTE;
+  Pause := NO_NOTE;
+  Lines := @CurrentSong.Tracks[Track];
+  if (Length(Lines.Lines) = 0) then
+    Exit;
+  LineIndex := EnsureRange(Lines.CurrentLine, 0, High(Lines.Lines));
+  Beat := LyricsState.MidBeat;
+  Now := LyricsState.GetCurrentTime();
+
+  HasNext := false;
+  HasPrev := false;
+  NextBeat := 0;
+  PrevEndBeat := 0;
+  if (Length(Lines.Lines[LineIndex].Notes) > 0) then
+  begin
+    if (Beat < Lines.Lines[LineIndex].Notes[0].StartBeat) then
+    begin
+      // waiting for the current line
+      HasNext := true;
+      NextBeat := Lines.Lines[LineIndex].Notes[0].StartBeat;
+    end
+    else if (Beat <= LineEnd(LineIndex)) then
+    begin
+      // singing the current line
+      ToNext := 0;
+      Pause := 0;
+      Exit;
+    end
+    else
+    begin
+      // the current line is sung, the next note is in a later line
+      HasPrev := true;
+      PrevEndBeat := LineEnd(LineIndex);
+    end;
+  end;
+
+  // the next note in a later line
+  if not HasNext then
+    while (LineIndex < High(Lines.Lines)) and not HasNext do
+    begin
+      Inc(LineIndex);
+      if (Length(Lines.Lines[LineIndex].Notes) > 0) then
+      begin
+        HasNext := true;
+        NextBeat := Lines.Lines[LineIndex].Notes[0].StartBeat;
+      end;
+    end;
+  if not HasNext then
+    Exit;
+
+  // the previous note in an earlier line
+  if not HasPrev then
+  begin
+    LineIndex := EnsureRange(Lines.CurrentLine, 0, High(Lines.Lines)) - 1;
+    while (LineIndex >= 0) and not HasPrev do
+    begin
+      if (Length(Lines.Lines[LineIndex].Notes) > 0) then
+      begin
+        HasPrev := true;
+        PrevEndBeat := LineEnd(LineIndex);
+      end;
+      Dec(LineIndex);
+    end;
+  end;
+
+  ToNext := Max(0.0, GetTimeFromBeat(NextBeat) - Now);
+  if HasPrev then
+    Pause := GetTimeFromBeat(NextBeat) - GetTimeFromBeat(PrevEndBeat);
+end;
+
+{ part cues, set by Ini.PartCues (key C in the song):
+  "your turn": after a pause, the lyrics of a part light up in the color of its singers,
+  with their avatars, shortly before its next line;
+  "dim idle parts": the lyrics of parts that do not sing for a while fade out }
+procedure TScreenSingView.DrawPartCues;
+var
+  Track:       integer;
+  PlayerIndex: integer;
+  AvatarIndex: integer;
+  Singer:      integer;
+  Engine:      TLyricEngine;
+  ToNext:      real;
+  Pause:       real;
+  Target:      real;
+  Delta:       real;
+  Ticks:       cardinal;
+  Pulse:       real;
+  X, Y, W, H:  real;
+  Size:        real;
+  Col:         TRGB;
+  Avatar:      TTexture;
+
+  function Approach(Value, Goal, Step: real): real;
+  begin
+    if (Value < Goal) then
+      Result := Min(Goal, Value + Step)
+    else
+      Result := Max(Goal, Value - Step);
+  end;
+
+begin
+  Ticks := SDL_GetTicks();
+  Delta := Min(0.1, (Ticks - CueLastTicks) / 1000);
+  CueLastTicks := Ticks;
+  Pulse := 0.5 + 0.5 * Sin(Ticks / 150);
+
+  for Track := 0 to High(CurrentSong.Tracks) do
+  begin
+    Engine := ScreenSing.LyricsDuet[Track];
+    Singer := ScreenSing.TrackSinger(Track);
+    if (Singer < 0) or ScreenSing.ReadyCheck then
+    begin
+      // parts nobody sings are already gray, and the song has not started
+      CueAlpha[Track] := 0;
+      DimAlpha[Track] := 1;
+      Engine.LineAlpha := 1;
+      Continue;
+    end;
+    GetTrackPause(Track, ToNext, Pause);
+
+    // dim idle parts
+    if (Ini.PartCues in [2, 3]) and (ToNext > CUE_DIM_LEAD) then
+      Target := CUE_DIM_ALPHA
+    else
+      Target := 1;
+    DimAlpha[Track] := Approach(DimAlpha[Track], Target, Delta * 2);
+    Engine.LineAlpha := DimAlpha[Track];
+
+    // your turn
+    if (Ini.PartCues in [1, 3]) and (Pause >= CUE_MIN_PAUSE) and (ToNext > 0) and (ToNext <= CUE_LEAD) then
+      Target := 1
+    else
+      Target := 0;
+    CueAlpha[Track] := Approach(CueAlpha[Track], Target, Delta * 4);
+    if (CueAlpha[Track] <= 0) then
+      Continue;
+
+    // glow behind the lyrics of the part, in the color of its first singer
+    X := Engine.UpperLineX;
+    Y := Engine.UpperLineY;
+    W := Engine.UpperLineW;
+    H := Engine.LowerLineY + Engine.LowerLineH - Engine.UpperLineY;
+    Col := GetPlayerColor(Ini.SingColor[Singer]);
+    Renderer.DrawQuad(X, Y, 0, W, H, Col.R, Col.G, Col.B, CueAlpha[Track] * (0.25 + 0.2 * Pulse));
+    Renderer.DrawBoundedBox(X, Y, X + W, Y + H, 0, 3, Col.R, Col.G, Col.B, CueAlpha[Track]);
+
+    // avatars of the singers of the part at its right end, bouncing
+    Size := H * (0.8 + 0.1 * Pulse);
+    AvatarIndex := 0;
+    for PlayerIndex := 0 to PlayersPlay - 1 do
+    begin
+      if (Player[PlayerIndex].Track <> Track) then
+        Continue;
+      Col := GetPlayerColor(Ini.SingColor[PlayerIndex]);
+      Avatar := ReadyAvatars[PlayerIndex];
+      X := Engine.UpperLineX + Engine.UpperLineW - 6 - (AvatarIndex + 1) * (H * 0.9 + 4) + (H * 0.9 - Size) / 2;
+      Y := Engine.UpperLineY + (H - Size) / 2;
+      if Assigned(Avatar) then
+      begin
+        Avatar.X := X;
+        Avatar.Y := Y;
+        Avatar.Z := 0;
+        Avatar.W := Size;
+        Avatar.H := Size;
+        Avatar.Alpha := CueAlpha[Track];
+        Renderer.DrawTexture(Avatar);
+      end;
+      Renderer.DrawBoundedBox(X, Y, X + Size, Y + Size, 0, 3, Col.R, Col.G, Col.B, CueAlpha[Track]);
+      Inc(AvatarIndex);
+    end;
   end;
 end;
 

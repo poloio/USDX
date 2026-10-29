@@ -116,6 +116,7 @@ type
 
       FontFamily:      byte;       // Font family for the lyric text
       FontStyle:       byte;       // Font style for the lyric text
+      LineAlpha:       real;       // Alpha of all lyrics of the engine, below 1 dims them
 
       { // currently not used
        FadeInEffect:   byte;       // Effect for line fading in: 0: No Effect; 1: Fade Effect; 2: Move Upwards from Bottom to Pos
@@ -207,6 +208,7 @@ begin
   QueueLine := TLyricLine.Create;
 
   LastDrawBeat := 0;
+  LineAlpha := 1;
 
   UpperLineX := ULX;
   UpperLineW := ULW;
@@ -564,6 +566,7 @@ begin
     else
       Alpha := ScreenJukebox.LyricsAlpha;
   end;
+  Alpha := Alpha * LineAlpha;
 
   // check if this line is active (at least its first note must be active)
   if (Beat >= Line.StartNote) then
@@ -609,6 +612,7 @@ begin
         Alpha := 1 - (Beat - (LastWord.Start + LastWord.Length)) / 15;
         if (Alpha < 0) then
           Alpha := 0;
+        Alpha := Alpha * LineAlpha;
       end
     end
     else
@@ -617,6 +621,7 @@ begin
         Alpha := ILyricsAlphaVals[Ini.JukeboxAlpha]
       else
         Alpha := ScreenJukebox.LyricsAlpha;
+      Alpha := Alpha * LineAlpha;
     end;
 
     // outline color

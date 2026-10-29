@@ -130,6 +130,33 @@ for duets with 3 or more players. If no players share a part, the game shows no 
 
 ![4 players sing a song with 3 parts](sing-4-players.jpg)
 
+### Ready check
+
+With 2 or more players, the song waits until all players are ready. This works for all songs, not only
+songs with parts. Over the note row of each player, a panel shows the avatar, the name, the color, and
+the part of the player, with a meter of the microphone.
+
+- A player is ready after singing a note into their microphone for a short time. The game uses its
+  normal tone detection for this, so noise does not count.
+- A player can also press their number (<kbd>1</kbd> to <kbd>6</kbd>). A player without a microphone
+  must press the number.
+- When all players are ready, a countdown of 3 seconds starts the song.
+- <kbd>Enter</kbd> starts the song at once. <kbd>Esc</kbd> goes back to the song list.
+
+The option **Ready Check** in the game options turns it off. The ready check is not used in party modes
+and medleys.
+
+### Part cues
+
+In songs with parts and 2 or more players, part cues help each player follow their own lyrics:
+
+- **Your turn**: when a part pauses for 4 seconds or more, its lyrics light up in the color of its player
+  2.5 seconds before its next line, with the avatars of its players.
+- **Dim idle parts**: the lyrics of a part that does not sing in the next 3 seconds fade out.
+
+The option **Part Cues** in the lyrics options selects Off, Your Turn, Dim Idle Parts, or Both (the
+default). <kbd>C</kbd> on the sing screen changes it during the song.
+
 ## Song list
 
 The song list shows the name of the part that each player sings. With 4 or 6 players on one screen, the
@@ -199,7 +226,10 @@ The changes are in these units:
 | `src/base/UNote.pas` | The part of a player is `Player[N].Track`. `Sing` updates the current line of each shown part. |
 | `src/base/UGraphicClasses.pas` | The golden note effects use the part of each player. |
 | `src/screens/controllers/UScreenSingController.pas` | `LoadNextSong` sets `Player[N].Track` from the song list. One lyric engine for each part (`LyricsDuet`), not two. `GetShownTracks` gives the parts whose lines the game follows. `TrackSinger` gives the player whose color a part gets. `OnSentenceEnd` calculates the line bonus for each part. |
-| `src/screens/views/UScreenSingView.pas` | `SetDuetLyricsLayout` places the lyrics of each part near the note rows of its players. `SetDuetLyricsColors` sets the color of each part for the current screen. |
+| `src/screens/views/UScreenSingView.pas` | `SetDuetLyricsLayout` places the lyrics of each part near the note rows of its players. `SetDuetLyricsColors` sets the color of each part for the current screen. `DrawReadyCheck` draws the ready check over the note rows (`GetPlayerRow`). `DrawPartCues` draws the "your turn" cue and dims idle parts (`GetTrackPause`). |
+| `src/screens/controllers/UScreenSingController.pas` (ready check) | `onShowFinish` starts the ready check instead of the music. `UpdateReadyCheck` detects a sung tone for each player, `StartMusic` starts the song. |
+| `src/base/ULyrics.pas` | `TLyricEngine.LineAlpha` dims all lyrics of an engine. |
+| `src/base/UIni.pas` | The options `ReadyCheck` (`[Game]`) and `PartCues` (`[Lyrics]`). |
 | `src/base/UDraw.pas` | Draws the lyrics of each part, the note rows of each player's part, and the color marks. |
 | `src/screens/UScreenSong.pas` | `PlayerTracks`, changed with <kbd>Space</kbd> and <kbd>1</kbd> to <kbd>6</kbd>, replaces `DuetChange`. The part name of each player. The layout for 4 players and 3 or more parts. |
 | `src/screens/UScreenEditSub.pas` | The editor keeps the current note and the lyrics of each part. The keys go to, copy to, and move to the next or previous part. `ShownTrack` gives the two parts that the header and the info bars show. |
