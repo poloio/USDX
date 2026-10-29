@@ -8,7 +8,11 @@ official release.
 - A song can have up to 6 parts (`P1` to `P6`). Each player sings one part, with their own notes, lyrics, and score.
 - With 3 or more parts, the lyrics of the parts show side by side. Each part shows its next line below its current line.
 - If players share a part, color marks next to the lyrics show who sings each part. This also helps in duets with 3 or more players.
-- The song list shows the part of each player. <kbd>Space</kbd> in the song list rotates the parts.
+- The song list shows the part of each player. <kbd>Space</kbd> in the song list rotates the parts of all players. The keys <kbd>1</kbd> to <kbd>6</kbd> give that player the next part, so players can choose their part.
+- The lyrics of each part show near the notes of its singers, also with 4 and 6 players.
+- Parts that nobody sings show in gray, without a score.
+- The song editor opens, edits, and saves songs with 3 to 6 parts.
+- Fixed: the song editor crashed on undo after switching duet parts. Songs with an empty line after the header showed as solo songs in the song list.
 - Solo songs and duet songs work as before.
 
 Details: [Songs with 3 to 6 parts](https://github.com/poloio/USDX/blob/@TAG@/doc/multi-part-songs/README.md)
@@ -45,7 +49,6 @@ folder. It is a round for three voices, with public domain melody and lyrics.
 
 ## Known limits
 
-- The song editor does not open songs with more than 2 parts.
 - There is no macOS build.
 - The official UltraStar Deluxe cannot load songs with more than 2 parts.
 - These items have no tests yet: scores with real microphones, and two screens.

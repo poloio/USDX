@@ -11,6 +11,16 @@
 > The branch `trio` has the changes. The branch `master` is a copy of the official project.
 > This fork is not an official release of UltraStar Deluxe.
 >
+> **What's new in the branch `trio` (October 29, 2026, not in a release build yet):**
+>
+> - Each player chooses their part: in the song list, the keys <kbd>1</kbd> to <kbd>6</kbd> give that player the
+>   next part. <kbd>Space</kbd> still rotates the parts of all players.
+> - The lyrics of each part show near the notes of its singers, also with 4 and 6 players.
+> - Parts that nobody sings show in gray, without a score. Old duet files that use `P3` for both singers work.
+> - The song editor opens, edits, and saves songs with 3 to 6 parts.
+> - Fixed: the song editor crashed on undo after switching duet parts.
+> - Fixed: a song with an empty line after the header showed as a solo song in the song list.
+>
 > ![3 players sing a song with 3 parts](doc/multi-part-songs/sing-3-players.jpg)
 
 [![Build Status](https://github.com/UltraStar-Deluxe/USDX/actions/workflows/main.yml/badge.svg)](https://github.com/UltraStar-Deluxe/USDX/actions/workflows/main.yml)
