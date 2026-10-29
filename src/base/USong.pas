@@ -1434,8 +1434,8 @@ begin
         self.CalcMedley := false;
     end;
 
-    // Duet Singer Names P1, P2, P3, ...
-    for I := 1 to MAX_SONG_TRACKS do
+    // Duet Singer Names P1, P2, P3, ... up to the parts the song has (known from the duet check above)
+    for I := 1 to Max(2, TrackCount) do
     begin
       if (TagMapTryGetData('DUETSINGERP' + IntToStr(I), Value)) then
       begin
