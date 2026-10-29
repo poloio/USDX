@@ -109,7 +109,7 @@ type
 
       //Duet Icon
       DuetIcon:     cardinal;
-      DuetChange:   boolean;
+      PlayerTracks: array of integer; // duet track (part) of each player, empty: player N sings track N
 
       //Rap Icons
       RapIcon:     cardinal;
@@ -292,6 +292,8 @@ type
       procedure StartSong;
       procedure OpenEditor;
       procedure DoJoker(Team: integer; SDL_ModState: Word);
+      function GetPlayerTrack(PlayerIndex, TrackCount: integer): integer;
+      procedure ChangePlayerTrack(PlayerIndex: integer);
       procedure SelectPlayers;
 
       procedure OnSongSelect;   // called when song flows movement stops at a song
@@ -366,7 +368,7 @@ begin
   begin
     PreviousSong := CurrentSong;
     try
-      CatSongs.Song[SongIndex].Analyse(false, false, false, false, 0, true);
+      CatSongs.Song[SongIndex].Analyse(false, false, false, 0, true);
     finally
       CurrentSong := PreviousSong;
     end;
@@ -834,6 +836,15 @@ begin
     if (SDL_ModState = KMOD_LCTRL) and (PressedKey = SDLK_R) then
       CharCode := UCS4Char('R');
     // **********************
+
+    // 1 to 6: the player with this number sings the next part of the duet
+    if (Mode = smNormal) and (SDL_ModState = 0) and
+       (PressedKey >= SDLK_1) and (PressedKey - SDLK_1 < PlayersPlay) and
+       (Songs.SongList.Count > 0) and (CatSongs.Song[Interaction].isDuet) then
+    begin
+      ChangePlayerTrack(PressedKey - SDLK_1);
+      Exit;
+    end;
 
     // check normal keys
     case PressedKey of
@@ -1392,8 +1403,9 @@ begin
           if (Mode = smJukebox) and (not CatSongs.Song[Interaction].Main) then
             ScreenJukebox.AddSongToJukeboxList(Interaction);
 
+          // every player sings the next part
           if (Mode = smNormal) and (CatSongs.Song[Interaction].isDuet) then
-            DuetChange := not DuetChange;
+            ChangePlayerTrack(-1);
         end;
       SDLK_1:
         begin //Joker
@@ -2170,7 +2182,7 @@ end;
 { called before current song is deselected }
 procedure TScreenSong.OnSongDeSelect;
 begin
-  DuetChange := false;
+  SetLength(PlayerTracks, 0);
   RapToFreestyle := false;
 
   CoverTime := 10;
@@ -2204,12 +2216,21 @@ var
   VS, B, SongsInCat: integer;
   FirstPlayer: integer;
   ThreeRows: boolean;
-  // name of the track sung by the player with the given index (0-based)
-  function DuetName(PlayerIndex: integer): UTF8String;
+  // name of the track sung by the player with the given index (0-based), followed
+  // by the track of RowPartner if this player shows its color in the same row
+  // and sings another track
+  function DuetName(PlayerIndex: integer; RowPartner: integer = -1): UTF8String;
+  var
+    Track, PartnerTrack: integer;
   begin
-    if (DuetChange) then
-      Inc(PlayerIndex);
-    Result := CatSongs.Song[Interaction].DuetNames[PlayerIndex mod CatSongs.Song[Interaction].TrackCount];
+    Track := GetPlayerTrack(PlayerIndex, CatSongs.Song[Interaction].TrackCount);
+    Result := CatSongs.Song[Interaction].DuetNames[Track];
+    if (RowPartner >= 0) then
+    begin
+      PartnerTrack := GetPlayerTrack(RowPartner, CatSongs.Song[Interaction].TrackCount);
+      if (PartnerTrack <> Track) then
+        Result := Result + ' / ' + CatSongs.Song[Interaction].DuetNames[PartnerTrack];
+    end;
   end;
 
   procedure HideDuetElements;
@@ -2322,14 +2343,37 @@ begin
       // Set duet texts
       if (ThreeRows) then
       begin
-        // 6 players: screen 2 shows players 4 to 6
-        if (PlayersPlay = 6) and (ScreenAct = 2) then
-          FirstPlayer := 3
+        if (Screens = 1) and (PlayersPlay = 6) then
+        begin
+          // the colors of players 4 to 6 are in the rows of players 1 to 3
+          Text[Text3PlayersDuetSingerP1].Text := DuetName(0, 3);
+          Text[Text3PlayersDuetSingerP2].Text := DuetName(1, 4);
+          Text[Text3PlayersDuetSingerP3].Text := DuetName(2, 5);
+        end
+        else if (Screens = 1) and (PlayersPlay = 4) then
+        begin
+          // the color of player 4 is in the row of player 1
+          Text[Text3PlayersDuetSingerP1].Text := DuetName(0, 3);
+          Text[Text3PlayersDuetSingerP2].Text := DuetName(1);
+          Text[Text3PlayersDuetSingerP3].Text := DuetName(2);
+        end
         else
-          FirstPlayer := 0;
-        Text[Text3PlayersDuetSingerP1].Text := DuetName(FirstPlayer);
-        Text[Text3PlayersDuetSingerP2].Text := DuetName(FirstPlayer + 1);
-        Text[Text3PlayersDuetSingerP3].Text := DuetName(FirstPlayer + 2);
+        begin
+          // 6 players: screen 2 shows players 4 to 6
+          if (PlayersPlay = 6) and (ScreenAct = 2) then
+            FirstPlayer := 3
+          else
+            FirstPlayer := 0;
+          Text[Text3PlayersDuetSingerP1].Text := DuetName(FirstPlayer);
+          Text[Text3PlayersDuetSingerP2].Text := DuetName(FirstPlayer + 1);
+          Text[Text3PlayersDuetSingerP3].Text := DuetName(FirstPlayer + 2);
+        end;
+      end
+      else if (Screens = 1) and (PlayersPlay = 4) then
+      begin
+        // the colors of players 3 and 4 are in the rows of players 1 and 2
+        Text[Text2PlayersDuetSingerP1].Text := DuetName(0, 2);
+        Text[Text2PlayersDuetSingerP2].Text := DuetName(1, 3);
       end
       else
       begin
@@ -2961,7 +3005,7 @@ begin
     AudioPlayback.Stop;
 
   PreviewOpened := -1;
-  DuetChange := false;
+  SetLength(PlayerTracks, 0);
   RapToFreestyle := false;
 
   // reset video playback engine
@@ -3050,7 +3094,7 @@ procedure TScreenSong.OnShowFinish;
 var
   NextSongID: Integer;
 begin
-  DuetChange := false;
+  SetLength(PlayerTracks, 0);
   RapToFreestyle := false;
 
   isScrolling := true;
@@ -4214,6 +4258,35 @@ begin
 end;
 
 //Team No of Team (0-5)
+{ returns the duet track (part) sung by the player with the given index }
+function TScreenSong.GetPlayerTrack(PlayerIndex, TrackCount: integer): integer;
+begin
+  if (PlayerIndex < Length(PlayerTracks)) then
+    Result := PlayerTracks[PlayerIndex] mod TrackCount
+  else
+    Result := PlayerIndex mod TrackCount;
+end;
+
+{ the player with the given index sings the next track of the selected duet,
+  all players do if PlayerIndex is -1 }
+procedure TScreenSong.ChangePlayerTrack(PlayerIndex: integer);
+var
+  I, TrackCount: integer;
+begin
+  TrackCount := CatSongs.Song[Interaction].TrackCount;
+  // also the rows of the song list without a player rotate, as in duets with one player
+  if (Length(PlayerTracks) = 0) then
+  begin
+    SetLength(PlayerTracks, IMaxPlayerCount);
+    for I := 0 to High(PlayerTracks) do
+      PlayerTracks[I] := I mod TrackCount;
+  end;
+
+  for I := 0 to High(PlayerTracks) do
+    if (PlayerIndex = -1) or (PlayerIndex = I) then
+      PlayerTracks[I] := (PlayerTracks[I] + 1) mod TrackCount;
+end;
+
 procedure TScreenSong.DoJoker (Team: integer; SDL_ModState: Word);
 begin
   if (Mode = smPartyClassic) and

@@ -1028,7 +1028,7 @@ begin
       Bounds.Right := Bounds.Left + BarWidth;
       if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
       begin
-        if (CP = 0) then
+        if not ScreenSing.LyricsDuetLowerBar[CP] then
           Bounds.Top := Theme.LyricBarDuetP1.IndicatorYOffset + LyricEngine.UpperLineY
         else
           Bounds.Top := Theme.LyricBarDuetP2.IndicatorYOffset + LyricEngine.UpperLineY;
@@ -1038,30 +1038,9 @@ begin
 
       Bounds.Bottom := Bounds.Top + BarHeight + 3;
 
-      // draw lyric help bar
+      // draw lyric help bar, in the color of a player of the track
       if (CurrentSong.isDuet) then
-      begin
-        if (PlayersPlay = 1) or (PlayersPlay = 2) then
-          Col := GetLyricBarColor(Ini.SingColor[CP])
-        else
-        begin
-          if (PlayersPlay = 3) or (PlayersPlay = 6) then
-          begin
-            //if (PlayersPlay = 3) then
-              Col := GetLyricBarColor(Ini.SingColor[CP]);
-
-            //if (PlayersPlay = 6) then
-            //  Col := GetLyricBarColor(CP + 1);
-          end
-          else
-          begin
-            if ScreenAct = 1 then
-              Col := GetLyricBarColor(Ini.SingColor[CP])
-            else
-              Col := GetLyricBarColor(Ini.SingColor[CP + 2]);
-          end;
-        end;
-      end
+        Col := GetLyricBarColor(Ini.SingColor[Max(ScreenSing.TrackSinger(CP), 0)])
       else
         Col := GetLyricBarColor(1);
 
@@ -1289,21 +1268,33 @@ procedure SingDrawLyricsPlayerMarks;
 var
   QuadList:    TQuadList;
   PlayerIndex: integer;
+  OtherPlayer: integer;
+  MarkIndex:   integer;
+  Shared:      boolean;
   Engine:      TLyricEngine;
   Col:         TRGB;
 begin
-  if (PlayersPlay <= CurrentSong.TrackCount) then
+  Shared := false;
+  for PlayerIndex := 1 to PlayersPlay - 1 do
+    for OtherPlayer := 0 to PlayerIndex - 1 do
+      if (Player[OtherPlayer].Track = Player[PlayerIndex].Track) then
+        Shared := true;
+  if not Shared then
     Exit;
 
   SetLength(QuadList, PlayersPlay);
   for PlayerIndex := 0 to PlayersPlay - 1 do
   begin
-    // player N sings track N mod TrackCount, the marks of a track are side by side right of its lyrics
-    Engine := ScreenSing.LyricsDuet[PlayerIndex mod CurrentSong.TrackCount];
+    // the marks of the players of a track are side by side right of its lyrics
+    Engine := ScreenSing.LyricsDuet[Player[PlayerIndex].Track];
     Col := GetPlayerColor(Ini.SingColor[PlayerIndex]);
+    MarkIndex := 0;
+    for OtherPlayer := 0 to PlayerIndex - 1 do
+      if (Player[OtherPlayer].Track = Player[PlayerIndex].Track) then
+        Inc(MarkIndex);
 
     QuadList[PlayerIndex].X := Engine.UpperLineX + Engine.UpperLineW + LYRIC_MARK_SPACE +
-                               (PlayerIndex div CurrentSong.TrackCount) * (LYRIC_MARK_WIDTH + LYRIC_MARK_SPACE);
+                               MarkIndex * (LYRIC_MARK_WIDTH + LYRIC_MARK_SPACE);
     QuadList[PlayerIndex].Y := Engine.UpperLineY;
     QuadList[PlayerIndex].Z := 0;
     QuadList[PlayerIndex].W := LYRIC_MARK_WIDTH;
@@ -1343,23 +1334,15 @@ begin
   NR.WMid  := 380; //NR.Width / 2;
   NR.Mid   := 400; //NR.Left + NR.WMid;
 
-  TrackP1 := 0;
-  TrackP2 := 0;
-  TrackP3 := 0;
-  TrackP4 := 0;
-  TrackP5 := 0;
-  TrackP6 := 0;
+  // the track (part) each player sings, set when the song is loaded
+  TrackP1 := Player[0].Track;
+  TrackP2 := Player[Min(1, PlayersPlay - 1)].Track;
+  TrackP3 := Player[Min(2, PlayersPlay - 1)].Track;
+  TrackP4 := Player[Min(3, PlayersPlay - 1)].Track;
+  TrackP5 := Player[Min(4, PlayersPlay - 1)].Track;
+  TrackP6 := Player[Min(5, PlayersPlay - 1)].Track;
   // FIXME: accessing ScreenSing is not that generic
-  if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
-  begin
-    // player N sings track N, wrapping around if there are more players than tracks
-    TrackP2 := 1 mod CurrentSong.TrackCount;
-    TrackP3 := 2 mod CurrentSong.TrackCount;
-    TrackP4 := 3 mod CurrentSong.TrackCount;
-    TrackP5 := 4 mod CurrentSong.TrackCount;
-    TrackP6 := 5 mod CurrentSong.TrackCount;
-  end
-  else
+  if not ((CurrentSong.isDuet) and (PlayersPlay <> 1)) then
     LyricEngine := ScreenSing.Lyrics;
 
   // draw lyrics
@@ -1367,11 +1350,14 @@ begin
   begin
     if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
     begin
-      for I := 0 to ScreenSing.SungTrackCount - 1 do
+      for I := 0 to High(CurrentSong.Tracks) do
       begin
         ScreenSing.LyricsDuet[I].Draw(LyricsState.MidBeat);
-        if (ScreenSing.SungTrackCount > 2) then
-          // the lyrics of the track may be in a column of the lyrics bar
+        // nobody needs the lyric helper of a track nobody sings
+        if (ScreenSing.TrackSinger(I) < 0) then
+          Continue;
+        if (ScreenSing.LyricsDuetShared[I]) then
+          // the lyrics of the track are in a column of the lyrics bar
           SingDrawLyricHelper(I, ScreenSing.LyricsDuet[I].UpperLineX - LYRIC_HELPER_SPACE,
                               ScreenSing.LyricsDuet[I].UpperLineW / 2 + LYRIC_HELPER_SPACE)
         else
@@ -1382,7 +1368,7 @@ begin
     else
     begin
       LyricEngine.Draw(LyricsState.MidBeat);
-      SingDrawLyricHelper(0, NR.Left, NR.WMid);
+      SingDrawLyricHelper(Player[0].Track, NR.Left, NR.WMid);
     end;
   end;
 

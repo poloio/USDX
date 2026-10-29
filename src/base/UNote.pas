@@ -275,20 +275,17 @@ end;
 procedure Sing(Screen: TScreenSingController);
 var
   LineIndex:  integer;
-  CountGr:    integer;
   TrackIndex: integer;
-  PetGr:      integer;
+  FirstTrack: integer;
+  LastTrack:  integer;
 begin
   LyricsState.UpdateBeats();
 
-  PetGr := 0;
-  if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
-    PetGr := Min(CurrentSong.TrackCount, PlayersPlay) - 1;
+  Screen.GetShownTracks(FirstTrack, LastTrack);
 
   // sentences routines
-  for CountGr := 0 to PetGr do //High(Tracks)
+  for TrackIndex := FirstTrack to LastTrack do
   begin;
-    TrackIndex := CountGr;
 
     // old parts
     LyricsState.OldLine := CurrentSong.Tracks[TrackIndex].CurrentLine;
@@ -304,7 +301,7 @@ begin
     // (optimization on halfbeat time)
     if CurrentSong.Tracks[TrackIndex].CurrentLine <> LyricsState.OldLine then
       NewSentence(TrackIndex, Screen);
-  end; // for CountGr
+  end; // for TrackIndex
 
   // make some operations on clicks
   if {(LyricsState.CurrentBeatC >= 0) and }(LyricsState.OldBeatC <> LyricsState.CurrentBeatC) then
@@ -349,7 +346,7 @@ begin
   // clean note of player
   for I := 0 to High(Player) do
   begin
-    if (not CurrentSong.isDuet) or (I mod CurrentSong.TrackCount = CP) then
+    if (Player[I].Track = CP) then
     begin
       Player[I].LengthNote := 0;
       Player[I].HighNote := -1;
@@ -398,23 +395,19 @@ end;
 
 procedure NewBeatDetect(Screen: TScreenSingController);
   var
-    MaxCP, CP, SentenceEnd, StartLine, EndLine: integer;
-    I, J: cardinal;
+    FirstCP, LastCP, CP, SentenceEnd, StartLine, EndLine: integer;
+    I: cardinal;
 begin
   // check for sentence end
   // we check three lines (previous, current, next)
   // here because a new sentence may have started
   // before the old one finished due to corrupt line breaks
 
-  MaxCP := 0;
-  if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
-    MaxCP := Min(CurrentSong.TrackCount, PlayersPlay) - 1;
-
   if (assigned(Screen)) then
   begin
-    for J := 0 to MaxCP do
+    Screen.GetShownTracks(FirstCP, LastCP);
+    for CP := FirstCP to LastCP do
     begin
-      CP := J;
 
       StartLine := CurrentSong.Tracks[CP].CurrentLine - 1;
       if StartLine < 0 then
@@ -483,7 +476,7 @@ begin
     // analyze player signals
     for PlayerIndex := 0 to PlayersPlay-1 do
     begin
-      if (not CurrentSong.isDuet) or (PlayerIndex mod CurrentSong.TrackCount = CP) then
+      if (Player[PlayerIndex].Track = CP) then
       begin
         // check for an active note at the current time defined in the lyrics
         NoteAvailable := false;

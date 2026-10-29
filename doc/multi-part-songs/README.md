@@ -65,7 +65,8 @@ The song does not load in these conditions:
   The song shows in the song list, but it does not start.
 - Songs with 1 or 2 parts are not changed. The fork reads and plays them the same as the official game.
 - Some older duet files use `P3` for the lines that both singers sing. The official game does not load these
-  files. The fork loads them as songs with 3 parts. With 2 players, no player sings the `P3` lines.
+  files. The fork loads them as songs with 3 parts. With 2 players, no player sings the `P3` lines, but
+  they show in gray, so that both players can sing them without a score.
 
 The format project discussed songs with more parts in
 [UltraStar-Deluxe/format#17](https://github.com/UltraStar-Deluxe/format/issues/17). This fork uses the
@@ -74,8 +75,8 @@ singers sing. No part has a special meaning, for example "all singers".
 
 ## Players and parts
 
-Player 1 sings `P1`, player 2 sings `P2`, and so on. If there are more players than parts, the parts start
-again from `P1`.
+By default, player 1 sings `P1`, player 2 sings `P2`, and so on. If there are more players than parts,
+the parts start again from `P1`.
 
 | Players | Song with 2 parts | Song with 3 parts |
 |---|---|---|
@@ -85,42 +86,54 @@ again from `P1`.
 | 4 | `P1`, `P2`, `P1`, `P2` | `P1`, `P2`, `P3`, `P1` |
 | 6 | `P1`, `P2`, `P1`, `P2`, `P1`, `P2` | `P1`, `P2`, `P3`, `P1`, `P2`, `P3` |
 
-A part that no player sings does not show on the sing screen and does not get a score.
+A part that no player sings still shows on the sing screen, in gray, so that the players can follow it.
+It does not get a score.
 
-To change who sings which part, push <kbd>Space</kbd> in the song list. Each player then sings the next
-part: player 1 sings `P2`, player 2 sings `P3`, and the player of the last part sings `P1`. With two parts,
-this is the same as the duet swap of the official game.
+To change who sings which part, use these keys in the song list:
+
+| Key | Function |
+|---|---|
+| <kbd>Space</kbd> | Each player sings the next part: player 1 sings `P2`, player 2 sings `P3`, and the player of the last part sings `P1`. With two parts, this is the same as the duet swap of the official game. |
+| <kbd>1</kbd> to <kbd>6</kbd> | Only the player with this number sings the next part. Push the key again until the player has the part they want. Two or more players can sing the same part. |
+
+The song list shows the new parts at once. The choice stays until you select another song or a song ends.
+In the party modes, the keys <kbd>1</kbd> to <kbd>3</kbd> keep their joker function.
 
 ## Sing screen
 
 The layout of the note rows is the same as for duets. It depends on the number of players.
 
-The layout of the lyrics depends on the number of sung parts:
+With one player, the game uses the solo lyrics bar and shows only the part of the player.
 
-| Sung parts | Lyrics |
-|---|---|
-| 1 | The solo lyrics bar. |
-| 2 | The two duet lyrics bars of the theme, as for duets. |
-| 3 to 6 | The first half of the parts uses the upper duet bar. The other parts use the lower duet bar. Parts in the same bar show side by side. |
+With two or more players, the game shows the lyrics of all parts in the two duet lyrics bars of the theme:
+
+- The lyrics of a part go to the bar near the note rows of its players: the upper bar if the players are in
+  the upper half of the screen, the lower bar if they are in the lower half.
+- The other parts go to the bar with fewer parts. These are parts with players in both halves, and the
+  parts that nobody sings.
+- A part alone in its bar uses the full bar, as in duets.
+- Parts in the same bar show side by side. Their order is the order of the note row columns of their
+  players, for example with 4 players in two columns.
 
 Each part shows its current line, with its next line below. The text of the current line uses the color
-of the player. If a line is too long for its part of the bar, the game makes the font smaller.
+of a player of the part. If a line is too long for its part of the bar, the game makes the font smaller.
 
 The fork uses the duet lyrics bars of the theme. Themes do not need new sections.
 
 ### Color marks
 
-If there are more players than parts, some players share a part. Then each part shows a color mark for
-each player who sings it, to the right of its lyrics. Each player can find the lyrics of their part from
-the color. The marks also show for duets with 3 or more players. With one player for each part, the game
-shows no marks.
+If two or more players sing the same part, each part shows a color mark for each player who sings it, to
+the right of its lyrics. Each player can find the lyrics of their part from the color. The marks also show
+for duets with 3 or more players. If no players share a part, the game shows no marks.
 
 ![4 players sing a song with 3 parts](sing-4-players.jpg)
 
 ## Song list
 
-The song list shows the name of the part that each player sings. With 4 players and a song with 3 or more
-parts, the list shows three parts. A color mark shows that player 4 also sings `P1`.
+The song list shows the name of the part that each player sings. With 4 or 6 players on one screen, the
+theme has fewer rows than players. Then the color of a second player is in the row of another player: with
+4 players and a song with 3 or more parts, player 4 is in the row of player 1. If the two players of a row
+sing different parts, the row shows both names, for example `TOMMY / JIN`.
 
 ![The song list shows the part of each player](song-list.jpg)
 
@@ -164,13 +177,13 @@ The changes are in these units:
 | Unit | Change |
 |---|---|
 | `src/base/UMusic.pas` | The constant `MAX_SONG_TRACKS` (6). |
-| `src/base/USong.pas` | The parser adds a track when it finds `P3` to `P6`. It reads `#P3` to `#P6` and `#DUETSINGERP3` to `#DUETSINGERP6`. The field `TrackCount` gives the number of parts. The header scan of the song list also sets it. With `DuetChange`, the parser rotates the tracks. |
-| `src/base/UNote.pas` | The part of a player is `PlayerIndex mod TrackCount`. `Sing` updates the current line of each sung part. |
+| `src/base/USong.pas` | The parser adds a track when it finds `P3` to `P6`. It reads `#P3` to `#P6` and `#DUETSINGERP3` to `#DUETSINGERP6`. The field `TrackCount` gives the number of parts. The header scan of the song list also sets it. The tracks stay in the order of the file: the `DuetChange` parameter is gone. |
+| `src/base/UNote.pas` | The part of a player is `Player[N].Track`. `Sing` updates the current line of each shown part. |
 | `src/base/UGraphicClasses.pas` | The golden note effects use the part of each player. |
-| `src/screens/controllers/UScreenSingController.pas` | One lyric engine for each part (`LyricsDuet`), not two. `SungTrackCount` gives the number of parts that players sing. `OnSentenceEnd` calculates the line bonus for each part. |
-| `src/screens/views/UScreenSingView.pas` | `SetDuetLyricsLayout` sets the position of the lyrics for 2 and for 3 or more parts. |
-| `src/base/UDraw.pas` | Draws the lyrics of each sung part, the note rows of each player's part, and the color marks. |
-| `src/screens/UScreenSong.pas` | The part name of each player. The layout for 4 players and 3 or more parts. The song editor check. |
+| `src/screens/controllers/UScreenSingController.pas` | `LoadNextSong` sets `Player[N].Track` from the song list. One lyric engine for each part (`LyricsDuet`), not two. `GetShownTracks` gives the parts whose lines the game follows. `TrackSinger` gives the player whose color a part gets. `OnSentenceEnd` calculates the line bonus for each part. |
+| `src/screens/views/UScreenSingView.pas` | `SetDuetLyricsLayout` places the lyrics of each part near the note rows of its players. `SetDuetLyricsColors` sets the color of each part for the current screen. |
+| `src/base/UDraw.pas` | Draws the lyrics of each part, the note rows of each player's part, and the color marks. |
+| `src/screens/UScreenSong.pas` | `PlayerTracks`, changed with <kbd>Space</kbd> and <kbd>1</kbd> to <kbd>6</kbd>, replaces `DuetChange`. The part name of each player. The layout for 4 players and 3 or more parts. The song editor check. |
 | `src/base/UFiles.pas` | Writes a `#Pn` header for each part. |
 | `src/base/UDataBase.pas` | The number of parts for highscores comes from `TrackCount`. |
 | `game/languages` | The message `ERROR_MULTI_TRACK_NOT_EDITABLE`. |
@@ -183,14 +196,16 @@ each score (`TrackMask`).
 The tests used automatic runs of the game without a visible window (Xvfb), with screenshots:
 
 - A song with 3 parts, with 1, 2, 3, 4, and 6 players.
-- The rotation of parts with <kbd>Space</kbd>.
+- The rotation of parts with <kbd>Space</kbd>, also with 1 player.
+- A changed part for one player with <kbd>1</kbd> (3 players) and <kbd>4</kbd> (4 players).
+- A part that nobody sings (2 players, and after <kbd>1</kbd> with 3 players).
 - The Modern theme and the Deluxe theme.
 - A duet song with 2, 3, and 4 players, and with the duet swap.
 - A solo song with 1 and 3 players.
 - The song editor message for a song with 3 parts.
 
-The tests compared the duet and solo screens with the screens of the unmodified game. They were the same,
-except for the new color marks.
+The tests compared the duet and solo screens with the screens of the unmodified game (upstream master of
+2026-10-29). They were the same, except for the color marks of duets with 3 or more players.
 
 These items were not tested: scores with real microphones (the automatic runs have no microphone input),
 two screens, and macOS.

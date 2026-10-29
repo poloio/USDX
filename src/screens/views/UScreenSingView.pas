@@ -58,7 +58,6 @@ type
   public
 
     //StaticDuet: array of cardinal;
-    ColPlayer:  array[0..3] of TRGB;
 
     // lyrics bar fields
     StaticLyricsBar: integer;
@@ -211,7 +210,8 @@ type
 
     procedure DrawInfoLyricBar();
 
-    procedure SetDuetLyricsLayout(SungTracks: integer);
+    procedure SetDuetLyricsLayout;
+    procedure SetDuetLyricsColors;
   end;
 var
   lastVolume: single;
@@ -604,7 +604,6 @@ begin
   // one lyric engine per duet track, the positions are set by SetDuetLyricsLayout
   for I := 0 to High(ScreenSing.LyricsDuet) do
     ScreenSing.LyricsDuet[I] := TLyricEngine.Create(0, 0, 0, 0, 0, 0, 0, 0);
-  SetDuetLyricsLayout(2);
 
   ScreenSing.fLyricsSync := TLyricsSyncSource.Create();
   ScreenSing.fMusicSync := TMusicSyncSource.Create();
@@ -755,19 +754,6 @@ begin
     ScreenSing.Text[TextP5DuetSixP].Text   := ScreenSing.PlayerDuetNames[5];
     ScreenSing.Text[TextP6DuetSixP].Text   := ScreenSing.PlayerDuetNames[6];
 
-    if (CurrentSong.isDuet) then
-    begin
-      if (PlayersPlay = 4) then
-      begin
-        ScreenSing.LyricsDuet[0].LineColor_act.R := ColPlayer[0].R;
-        ScreenSing.LyricsDuet[0].LineColor_act.G := ColPlayer[0].G;
-        ScreenSing.LyricsDuet[0].LineColor_act.B := ColPlayer[0].B;
-
-        ScreenSing.LyricsDuet[1].LineColor_act.R := ColPlayer[1].R;
-        ScreenSing.LyricsDuet[1].LineColor_act.G := ColPlayer[1].G;
-        ScreenSing.LyricsDuet[1].LineColor_act.B := ColPlayer[1].B;
-      end;
-    end;
   end;
 
   if ScreenAct = 2 then
@@ -778,16 +764,6 @@ begin
         ScreenSing.Text[TextP1TwoP].Text := ScreenSing.PlayerNames[3];
         ScreenSing.Text[TextP2R].Text    := ScreenSing.PlayerNames[4];
 
-        if (CurrentSong.isDuet) and (PlayersPlay = 4) then
-        begin
-          ScreenSing.LyricsDuet[0].LineColor_act.R := ColPlayer[2].R;
-          ScreenSing.LyricsDuet[0].LineColor_act.G := ColPlayer[2].G;
-          ScreenSing.LyricsDuet[0].LineColor_act.B := ColPlayer[2].B;
-
-          ScreenSing.LyricsDuet[1].LineColor_act.R := ColPlayer[3].R;
-          ScreenSing.LyricsDuet[1].LineColor_act.G := ColPlayer[3].G;
-          ScreenSing.LyricsDuet[1].LineColor_act.B := ColPlayer[3].B;
-        end;
 
       end;
       6:
@@ -807,6 +783,9 @@ begin
       end;
     end; // case
   end; // if
+
+  if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
+    SetDuetLyricsColors;
 
   // retrieve current lyrics time, we have to store the value to avoid
   // that min- and sec-values do not match
@@ -869,12 +848,13 @@ begin
   begin
     // the last lines of all sung tracks must be finished
     LastLineSungToEnd := true;
-    for TrackIndex := 0 to ScreenSing.SungTrackCount - 1 do
+    for TrackIndex := 0 to High(CurrentSong.Tracks) do
     begin
       Line := ScreenSing.LyricsDuet[TrackIndex].GetUpperLine();
-      if not Line.LastLine or (Length(Line.Words) = 0) or
+      if (ScreenSing.TrackSinger(TrackIndex) >= 0) and
+         (not Line.LastLine or (Length(Line.Words) = 0) or
           (CurLyricsTime < GetTimeFromBeat(Line.Words[High(Line.Words)].Start +
-            Line.Words[High(Line.Words)].Length)) then
+            Line.Words[High(Line.Words)].Length))) then
         LastLineSungToEnd := false;
     end;
     if LastLineSungToEnd then
@@ -1316,73 +1296,146 @@ begin
 end;
 
 {**
- * Places the lyrics of the sung duet tracks. Two tracks use the duet lyric
- * bars of the theme. With more tracks (P3, ...) the first half of the tracks
- * shares the upper duet bar and the others share the lower one. Tracks that
- * share a bar are shown side by side, each with its current line and its
- * next line below, in full height. Space is left for the player color marks
- * of SingDrawLyricsPlayerMarks.
+ * Places the lyrics of the duet tracks in the two duet lyric bars of the
+ * theme. A track goes to the bar on the side of the screen with the note
+ * lines of its players, upper or lower half. The other tracks go to the bar
+ * with fewer tracks: tracks with players in both halves first, then the
+ * tracks nobody sings. A track alone in its bar uses the whole bar, as in
+ * duets. Tracks sharing a bar are shown side by side, in the order of the
+ * note line columns of their players, each with its current line and its next
+ * line below. Space is left for the player color marks of
+ * SingDrawLyricsPlayerMarks.
  *}
-procedure TScreenSingView.SetDuetLyricsLayout(SungTracks: integer);
+procedure TScreenSingView.SetDuetLyricsLayout;
 var
   TrackIndex:  integer;
+  OtherTrack:  integer;
+  PlayerIndex: integer;
+  Rows:        integer; // rows of note lines on a screen
+  Singers:     array [0..MAX_SONG_TRACKS-1] of integer;
+  FirstSinger: array [0..MAX_SONG_TRACKS-1] of integer; // tracks nobody sings come after all players
+  RowSum:      array [0..MAX_SONG_TRACKS-1] of real;    // < 0: players in the upper half, > 0: lower half
+  ColumnSum:   array [0..MAX_SONG_TRACKS-1] of real;
+  Bar:         array [0..MAX_SONG_TRACKS-1] of integer; // 0: upper bar, 1: lower bar, -1: not placed yet
+  BarTracks:   array [0..1] of integer;                 // tracks in each bar
+  BarIndex:    integer; // position of the track in its bar
+  ThemeBar:    TThemeLyricBar;
   Engine:      TLyricEngine;
-  Bar:         TThemeLyricBar;
-  UpperTracks: integer; // tracks in the upper bar
-  BarTracks:   integer; // tracks in the bar of the current track
-  BarIndex:    integer; // position of the current track in its bar
   ColumnW:     real;    // width of the part of a bar used by one track
   ColumnX:     real;
   MarksW:      real;    // space right of the lyrics for the player color marks
+
+  // the lyrics of track A are left of the ones of track B in their bar
+  function IsLeftOf(A, B: integer): boolean;
+  var
+    ColumnA, ColumnB: real;
+  begin
+    ColumnA := 2;
+    ColumnB := 2;
+    if (Singers[A] > 0) then
+      ColumnA := ColumnSum[A] / Singers[A];
+    if (Singers[B] > 0) then
+      ColumnB := ColumnSum[B] / Singers[B];
+    Result := (ColumnA < ColumnB) or ((ColumnA = ColumnB) and (FirstSinger[A] < FirstSinger[B]));
+  end;
+
+  // the next track to place in the bar with fewer tracks
+  function NextOpenTrack(): integer;
+  var
+    TrackIndex: integer;
+  begin
+    Result := -1;
+    for TrackIndex := 0 to High(CurrentSong.Tracks) do
+      if (Bar[TrackIndex] = -1) and
+         ((Result = -1) or (FirstSinger[TrackIndex] < FirstSinger[Result])) then
+        Result := TrackIndex;
+  end;
+
 begin
-  UpperTracks := (SungTracks + 1) div 2;
+  // the note lines of 4 and 6 players are in 2 columns or on 2 screens
+  if (PlayersPlay = 4) or (PlayersPlay = 6) then
+    Rows := PlayersPlay div 2
+  else
+    Rows := PlayersPlay;
+
+  for TrackIndex := 0 to High(CurrentSong.Tracks) do
+  begin
+    Singers[TrackIndex] := 0;
+    FirstSinger[TrackIndex] := PlayersPlay + TrackIndex;
+    RowSum[TrackIndex] := 0;
+    ColumnSum[TrackIndex] := 0;
+    Bar[TrackIndex] := -1;
+  end;
+
+  for PlayerIndex := PlayersPlay - 1 downto 0 do
+  begin
+    TrackIndex := Player[PlayerIndex].Track;
+    Inc(Singers[TrackIndex]);
+    FirstSinger[TrackIndex] := PlayerIndex;
+    RowSum[TrackIndex] := RowSum[TrackIndex] + (PlayerIndex mod Rows) - (Rows - 1) / 2;
+    if (Screens = 1) then
+      ColumnSum[TrackIndex] := ColumnSum[TrackIndex] + PlayerIndex div Rows;
+  end;
+
+  BarTracks[0] := 0;
+  BarTracks[1] := 0;
+  for TrackIndex := 0 to High(CurrentSong.Tracks) do
+  begin
+    if (Singers[TrackIndex] > 0) and (RowSum[TrackIndex] < 0) then
+      Bar[TrackIndex] := 0
+    else if (Singers[TrackIndex] > 0) and (RowSum[TrackIndex] > 0) then
+      Bar[TrackIndex] := 1;
+    if (Bar[TrackIndex] >= 0) then
+      Inc(BarTracks[Bar[TrackIndex]]);
+  end;
+
+  TrackIndex := NextOpenTrack();
+  while (TrackIndex >= 0) do
+  begin
+    if (BarTracks[0] <= BarTracks[1]) then
+      Bar[TrackIndex] := 0
+    else
+      Bar[TrackIndex] := 1;
+    Inc(BarTracks[Bar[TrackIndex]]);
+    TrackIndex := NextOpenTrack();
+  end;
 
   // players sharing a track get color marks next to its lyrics
-  // (CurrentSong is not set yet when this is called on creation with 2 tracks)
   MarksW := 0;
-  if (SungTracks > 2) and (PlayersPlay > CurrentSong.TrackCount) then
-    MarksW := Ceil(PlayersPlay / CurrentSong.TrackCount) * (LYRIC_MARK_WIDTH + LYRIC_MARK_SPACE);
+  for TrackIndex := 0 to High(CurrentSong.Tracks) do
+    if (Singers[TrackIndex] > 1) then
+      MarksW := Max(MarksW, Singers[TrackIndex] * (LYRIC_MARK_WIDTH + LYRIC_MARK_SPACE));
 
-  for TrackIndex := 0 to High(ScreenSing.LyricsDuet) do
+  for TrackIndex := 0 to High(CurrentSong.Tracks) do
   begin
     Engine := ScreenSing.LyricsDuet[TrackIndex];
-
-    if (SungTracks <= 2) then
-    begin
-      if (TrackIndex = 0) then
-        Bar := Theme.LyricBarDuetP1
-      else
-        Bar := Theme.LyricBarDuetP2;
-      BarTracks := 1;
-      BarIndex := 0;
-    end
-    else if (TrackIndex < UpperTracks) then
-    begin
-      Bar := Theme.LyricBarDuetP1;
-      BarTracks := UpperTracks;
-      BarIndex := TrackIndex;
-    end
+    if (Bar[TrackIndex] = 0) then
+      ThemeBar := Theme.LyricBarDuetP1
     else
-    begin
-      Bar := Theme.LyricBarDuetP2;
-      BarTracks := SungTracks - UpperTracks;
-      BarIndex := TrackIndex - UpperTracks;
-    end;
+      ThemeBar := Theme.LyricBarDuetP2;
 
-    Engine.UpperLineX := Bar.UpperX;
-    Engine.UpperLineY := Bar.UpperY;
-    Engine.UpperLineW := Bar.UpperW;
-    Engine.UpperLineH := Bar.UpperH;
-    Engine.LowerLineX := Bar.LowerX;
-    Engine.LowerLineY := Bar.LowerY;
-    Engine.LowerLineW := Bar.LowerW;
-    Engine.LowerLineH := Bar.LowerH;
+    BarIndex := 0;
+    for OtherTrack := 0 to High(CurrentSong.Tracks) do
+      if (Bar[OtherTrack] = Bar[TrackIndex]) and IsLeftOf(OtherTrack, TrackIndex) then
+        Inc(BarIndex);
+
+    ScreenSing.LyricsDuetLowerBar[TrackIndex] := (Bar[TrackIndex] = 1);
+    ScreenSing.LyricsDuetShared[TrackIndex] := (BarTracks[Bar[TrackIndex]] > 1);
+
+    Engine.UpperLineX := ThemeBar.UpperX;
+    Engine.UpperLineY := ThemeBar.UpperY;
+    Engine.UpperLineW := ThemeBar.UpperW;
+    Engine.UpperLineH := ThemeBar.UpperH;
+    Engine.LowerLineX := ThemeBar.LowerX;
+    Engine.LowerLineY := ThemeBar.LowerY;
+    Engine.LowerLineW := ThemeBar.LowerW;
+    Engine.LowerLineH := ThemeBar.LowerH;
 
     // tracks sharing a bar split the width of the lyrics bar background,
     // each column keeps space for the lyric helper on its left
-    if (BarTracks > 1) then
+    if (BarTracks[Bar[TrackIndex]] > 1) then
     begin
-      ColumnW := Theme.Sing.StaticLyricsBar.W / BarTracks;
+      ColumnW := Theme.Sing.StaticLyricsBar.W / BarTracks[Bar[TrackIndex]];
       ColumnX := Theme.Sing.StaticLyricsBar.X + BarIndex * ColumnW;
 
       Engine.UpperLineX := ColumnX + LYRIC_HELPER_SPACE;
@@ -1390,6 +1443,30 @@ begin
       Engine.LowerLineX := Engine.UpperLineX;
       Engine.LowerLineW := Engine.UpperLineW;
     end;
+  end;
+end;
+
+{**
+ * The sung text of a duet track has the color of a player who sings it,
+ * preferably one on the current screen. The text of tracks nobody sings is
+ * gray.
+ *}
+procedure TScreenSingView.SetDuetLyricsColors;
+var
+  TrackIndex: integer;
+  Singer:     integer;
+  Col:        TRGB;
+begin
+  for TrackIndex := 0 to High(CurrentSong.Tracks) do
+  begin
+    Singer := ScreenSing.TrackSinger(TrackIndex);
+    if (Singer >= 0) then
+      Col := GetPlayerColor(Ini.SingColor[Singer])
+    else
+      Col := GetLyricGrayColor(4);
+    ScreenSing.LyricsDuet[TrackIndex].LineColor_act.R := Col.R;
+    ScreenSing.LyricsDuet[TrackIndex].LineColor_act.G := Col.G;
+    ScreenSing.LyricsDuet[TrackIndex].LineColor_act.B := Col.B;
   end;
 end;
 

@@ -2548,7 +2548,7 @@ begin
 
   // FIXME: bad style, put the try-except into loadsong() and not here
   try
-    success := CurrentSong.Analyse and CurrentSong.LoadSong(false);
+    success := CurrentSong.Analyse and CurrentSong.LoadSong();
   except
     success := false;
   end;

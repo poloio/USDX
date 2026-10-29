@@ -110,6 +110,8 @@ type
 
     Lyrics: TLyricEngine;
     LyricsDuet: array [0..MAX_SONG_TRACKS-1] of TLyricEngine; // one per track of duets (P1, P2, P3, ...)
+    LyricsDuetLowerBar: array [0..MAX_SONG_TRACKS-1] of boolean; // the lyrics of the track are in the lower duet bar
+    LyricsDuetShared: array [0..MAX_SONG_TRACKS-1] of boolean;   // the track shares its duet bar with other tracks
 
     // score manager:
     Scores: TSingScores;
@@ -185,7 +187,8 @@ type
     procedure UpdateMedleyStats(medley_end: boolean);
     procedure OnSentenceEnd(Track: integer; SentenceIndex: cardinal);     // for linebonus + singbar
     procedure OnSentenceChange(Track: integer; SentenceIndex: cardinal);  // for golden notes
-    function SungTrackCount: integer;
+    procedure GetShownTracks(out FirstTrack, LastTrack: integer);
+    function TrackSinger(Track: integer): integer;
     property CountIn: boolean read fCountIn write fCountIn;
     property FirstNote: real read fFirstNote;
   end;
@@ -416,15 +419,15 @@ begin
         end
         else
         begin
-          // skip to 5 seconds before the next line of any sung track
-          if (SungTrackCount = 1) then
-            NextLineBeat := Lyrics.GetUpperLine().StartNote
-          else
+          // skip to 5 seconds before the next line of any track
+          if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
           begin
             NextLineBeat := LyricsDuet[0].GetUpperLine().StartNote;
-            for i1 := 1 to SungTrackCount - 1 do
+            for i1 := 1 to High(CurrentSong.Tracks) do
               NextLineBeat := min(NextLineBeat, LyricsDuet[i1].GetUpperLine().StartNote);
-          end;
+          end
+          else
+            NextLineBeat := Lyrics.GetUpperLine().StartNote;
 
           if (GetTimeFromBeat(NextLineBeat) - AudioPlayback.Position > 6) then
             AudioPlayback.SetPosition(GetTimeFromBeat(NextLineBeat) - 5);
@@ -755,17 +758,6 @@ begin
     CheckPlayerConfigOnNextSong := false;
   end;
 
-  if (CurrentSong.isDuet) then
-  begin
-    if (PlayersPlay = 4) then
-    begin
-      screenSingViewRef.ColPlayer[0] := GetPlayerColor(Ini.PlayerColor[0]);
-      screenSingViewRef.ColPlayer[1] := GetPlayerColor(Ini.PlayerColor[1]);
-      screenSingViewRef.ColPlayer[2] := GetPlayerColor(Ini.PlayerColor[2]);
-      screenSingViewRef.ColPlayer[3] := GetPlayerColor(Ini.PlayerColor[3]);
-    end;
-  end;
-
   // set custom options
   if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
   begin
@@ -774,11 +766,8 @@ begin
       LyricsDuet[TrackIndex].FontFamily := Ini.LyricsFont;
       LyricsDuet[TrackIndex].FontStyle := Ini.LyricsStyle;
 
-      // set custom options
-      Col := GetPlayerColor(Ini.PlayerColor[TrackIndex]);
-      LyricsDuet[TrackIndex].LineColor_act.R := Col.R;
-      LyricsDuet[TrackIndex].LineColor_act.G := Col.G;
-      LyricsDuet[TrackIndex].LineColor_act.B := Col.B;
+      // set custom options, the color of the sung text is set by
+      // TScreenSingView.SetDuetLyricsColors for each screen
       LyricsDuet[TrackIndex].LineColor_act.A := 1;
 
       if (Ini.JukeboxActualLineColor = High(UIni.IActualLineColor)) then
@@ -858,15 +847,6 @@ begin
       ScoreLast      := 0;
 
       LastSentencePerfect := false;
-
-      Track          := 0;
-      if CurrentSong.isDuet then
-      begin
-        if ScreenSong.DuetChange then
-          Track := (PlayerIndex + 1) mod CurrentSong.TrackCount
-        else
-          Track := PlayerIndex mod CurrentSong.TrackCount;
-      end;
     end;
 
   // prepare music
@@ -1003,6 +983,8 @@ var
   Color:      TRGB;
   Index:      integer;
   TrackIndex: integer;
+  FirstTrack: integer;
+  LastTrack:  integer;
   VideoFile:  IPath;
   BgFile:     IPath;
   success:    boolean;
@@ -1066,7 +1048,7 @@ begin
   success := false;
   // FIXME: bad style, put the try-except into loadsong() and not here
   try
-    success := CurrentSong.Analyse(false, ScreenSong.DuetChange, ScreenSong.RapToFreestyle, true, AudioEnd, true); // and CurrentSong.LoadSong();
+    success := CurrentSong.Analyse(false, ScreenSong.RapToFreestyle, true, AudioEnd, true); // and CurrentSong.LoadSong();
   except
     on E: EInOutError do Log.LogWarn(E.Message, 'TScreenSing.LoadNextSong');
   end;
@@ -1075,6 +1057,15 @@ begin
   begin
     SongError();
     Exit;
+  end;
+
+  // the track (part) of a duet each player sings, chosen in the song selection
+  for Index := 0 to High(Player) do
+  begin
+    if (CurrentSong.isDuet) then
+      Player[Index].Track := ScreenSong.GetPlayerTrack(Index, CurrentSong.TrackCount)
+    else
+      Player[Index].Track := 0;
   end;
 
   if ScreenSong.Mode = smMedley then
@@ -1246,9 +1237,9 @@ begin
 
   if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
   begin
-    screenSingViewRef.SetDuetLyricsLayout(SungTrackCount);
+    screenSingViewRef.SetDuetLyricsLayout;
 
-    for TrackIndex := 0 to SungTrackCount - 1 do
+    for TrackIndex := 0 to High(CurrentSong.Tracks) do
     begin
       // initialize lyrics by filling its queue
       while (not LyricsDuet[TrackIndex].IsQueueFull) and
@@ -1260,16 +1251,20 @@ begin
   end
   else
   begin
-    // initialize lyrics by filling its queue
+    // initialize lyrics by filling its queue, one player of a duet sees
+    // only the track they sing
+    TrackIndex := Player[0].Track;
     while (not Lyrics.IsQueueFull) and
-          (Lyrics.LineCounter <= High(CurrentSong.Tracks[0].Lines)) do
+          (Lyrics.LineCounter <= High(CurrentSong.Tracks[TrackIndex].Lines)) do
     begin
-      Lyrics.AddLine(@CurrentSong.Tracks[0].Lines[Lyrics.LineCounter]);
+      Lyrics.AddLine(@CurrentSong.Tracks[TrackIndex].Lines[Lyrics.LineCounter]);
     end;
   end;
 
+  GetShownTracks(FirstTrack, LastTrack);
+
   // kill all stars not killed yet (goldenstarstwinkle mod)
-  for TrackIndex := 0 to SungTrackCount - 1 do
+  for TrackIndex := FirstTrack to LastTrack do
     GoldenRec.SentenceChange(TrackIndex);
 
   // set position of line bonus - line bonus end
@@ -1277,7 +1272,7 @@ begin
   for TrackIndex := 0 to High(NumEmptySentences) do
     NumEmptySentences[TrackIndex] := 0;
 
-  for TrackIndex := 0 to SungTrackCount - 1 do
+  for TrackIndex := FirstTrack to LastTrack do
   begin
     for Index := Low(CurrentSong.Tracks[TrackIndex].Lines) to High(CurrentSong.Tracks[TrackIndex].Lines) do
       if CurrentSong.Tracks[TrackIndex].Lines[Index].ScoreValue = 0 then
@@ -1734,7 +1729,7 @@ begin
 
   for PlayerIndex := 0 to High(Player) do
   begin
-    if (not CurrentSong.isDuet) or (PlayerIndex mod CurrentSong.TrackCount = Track) or (PlayersPlay = 1)then
+    if (not CurrentSong.isDuet) or (Player[PlayerIndex].Track = Track) or (PlayersPlay = 1)then
     begin
       CurrentPlayer := @Player[PlayerIndex];
       CurrentScore  := CurrentPlayer.Score + CurrentPlayer.ScoreGolden;
@@ -1822,14 +1817,41 @@ begin
 
 end;
 
-// number of song tracks sung by the players, each one with its own lyrics:
-// 1 for solo songs and for one player, else one track per player at most
-function TScreenSingController.SungTrackCount: integer;
+// tracks whose lines are followed and shown: all tracks of a duet sung by
+// two or more players, also the tracks nobody sings, else the track of player 1
+procedure TScreenSingController.GetShownTracks(out FirstTrack, LastTrack: integer);
 begin
   if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
-    Result := Min(CurrentSong.TrackCount, PlayersPlay)
+  begin
+    FirstTrack := 0;
+    LastTrack := High(CurrentSong.Tracks);
+  end
   else
-    Result := 1;
+  begin
+    FirstTrack := Player[0].Track;
+    LastTrack := FirstTrack;
+  end;
+end;
+
+// player whose color the lyrics of the track get: the first player who sings
+// the track, preferably one on the current screen. -1 if nobody sings it.
+function TScreenSingController.TrackSinger(Track: integer): integer;
+var
+  PlayerIndex: integer;
+
+  // with 4 or 6 players on 2 screens, each screen shows half of the players
+  function OnScreen(PlayerIndex: integer): boolean;
+  begin
+    Result := (Screens = 1) or ((PlayersPlay <> 4) and (PlayersPlay <> 6)) or
+              ((PlayerIndex < PlayersPlay div 2) = (ScreenAct = 1));
+  end;
+
+begin
+  Result := -1;
+  for PlayerIndex := 0 to PlayersPlay - 1 do
+    if (Player[PlayerIndex].Track = Track) and
+       ((Result = -1) or (not OnScreen(Result) and OnScreen(PlayerIndex))) then
+      Result := PlayerIndex;
 end;
 
 function TLyricsSyncSource.GetClock(): real;

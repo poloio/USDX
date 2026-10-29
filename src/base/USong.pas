@@ -130,7 +130,7 @@ type
     function ReadTXTHeader(SongFile: TTextFileStream; ReadCustomTags: Boolean): boolean;
 
     function GetFolderCategory(const aFileName: IPath): UTF8String;
-    function LoadOpenedSong(SongFile: TTextFileStream; FileNamePath: IPath; DuetChange: boolean; RapToFreestyle: boolean; OutOfBoundsToFreestyle: boolean; AudioLength: real): boolean;
+    function LoadOpenedSong(SongFile: TTextFileStream; FileNamePath: IPath; RapToFreestyle: boolean; OutOfBoundsToFreestyle: boolean; AudioLength: real): boolean;
     function GetMD5: string;
     procedure SetMD5(const Value: string);
   public
@@ -218,8 +218,8 @@ type
     constructor Create(); overload;
     constructor Create(const aFileName : IPath); overload;
     destructor  Destroy; override;
-    function    LoadSong(DuetChange: boolean): boolean;
-    function    Analyse(const ReadCustomTags: Boolean = false; DuetChange: boolean = false; RapToFreestyle: boolean = false; OutOfBoundsToFreestyle: boolean = false; AudioLength: real = 0; ForceLoadNotes: boolean = false): boolean;
+    function    LoadSong(): boolean;
+    function    Analyse(const ReadCustomTags: Boolean = false; RapToFreestyle: boolean = false; OutOfBoundsToFreestyle: boolean = false; AudioLength: real = 0; ForceLoadNotes: boolean = false): boolean;
     procedure   GetPreviewRange(AudioLength: real; out PreviewStartPos, PreviewEndPos: real);
     procedure   SetMedleyMode();
     procedure   Clear();
@@ -610,7 +610,7 @@ begin
 end;
 
 //Load TXT Song
-function TSong.LoadSong(DuetChange: boolean): boolean;
+function TSong.LoadSong(): boolean;
 var
   SongFile:     TTextFileStream;
   FileNamePath: IPath;
@@ -626,18 +626,17 @@ begin
   end;
 
   CurrentSong := self;
-  Result := LoadOpenedSong(SongFile, FileNamePath, DuetChange, false, false, 0);
+  Result := LoadOpenedSong(SongFile, FileNamePath, false, false, 0);
   SongFile.Free;
 end;
 
-function TSong.LoadOpenedSong(SongFile: TTextFileStream; FileNamePath: IPath; DuetChange: boolean; RapToFreestyle: boolean; OutOfBoundsToFreestyle: boolean; AudioLength: real): boolean;
+function TSong.LoadOpenedSong(SongFile: TTextFileStream; FileNamePath: IPath; RapToFreestyle: boolean; OutOfBoundsToFreestyle: boolean; AudioLength: real): boolean;
 var
   CurLine:      RawByteString;
   LinePos:      integer;
   TrackIndex:   integer;
   NoteIndex:    integer;
   CurrentTrack: integer; // P1: 0, P2: 1, P3: 2, ...
-  FirstTrack:   TLines;
 
   Param0:       AnsiChar;
   Param1:       integer;
@@ -894,15 +893,6 @@ begin
         end;
 
     NextTrack: ;
-  end;
-
-  // DuetChange: each player sings the next track (P2, P3, ..., P1)
-  if DuetChange and (Length(Tracks) > 1) then
-  begin
-    FirstTrack := Tracks[0];
-    for TrackIndex := 0 to High(Tracks) - 1 do
-      Tracks[TrackIndex] := Tracks[TrackIndex + 1];
-    Tracks[High(Tracks)] := FirstTrack;
   end;
 
   TrackCount := Length(Tracks);
@@ -1982,7 +1972,7 @@ begin
   Relative := false;
 end;
 
-function TSong.Analyse(const ReadCustomTags: Boolean; DuetChange: boolean; RapToFreestyle: boolean; OutOfBoundsToFreestyle: boolean; AudioLength: real; ForceLoadNotes: boolean): boolean;
+function TSong.Analyse(const ReadCustomTags: Boolean; RapToFreestyle: boolean; OutOfBoundsToFreestyle: boolean; AudioLength: real; ForceLoadNotes: boolean): boolean;
 var
   SongFile: TTextFileStream;
   FileNamePath: IPath;
@@ -2015,7 +2005,7 @@ begin
     begin
       //Load Song for Medley Tags
       CurrentSong := Self;
-      NotesLoaded := LoadOpenedSong(SongFile, FileNamePath, DuetChange, RapToFreestyle, OutOfBoundsToFreestyle, AudioLength);
+      NotesLoaded := LoadOpenedSong(SongFile, FileNamePath, RapToFreestyle, OutOfBoundsToFreestyle, AudioLength);
       Result := Result and NotesLoaded;
     end;
 
