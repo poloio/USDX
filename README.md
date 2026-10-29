@@ -11,15 +11,19 @@
 > The branch `trio` has the changes. The branch `master` is a copy of the official project.
 > This fork is not an official release of UltraStar Deluxe.
 >
-> **What's new (October 29, 2026, release `trio-2026.10.29`):**
+> **What's new (October 29, 2026, release `trio-2026.10.29.2`):**
 >
-> - Each player chooses their part: in the song list, the keys <kbd>1</kbd> to <kbd>6</kbd> give that player the
->   next part. <kbd>Space</kbd> still rotates the parts of all players.
-> - The lyrics of each part show near the notes of its singers, also with 4 and 6 players.
-> - Parts that nobody sings show in gray, without a score. Old duet files that use `P3` for both singers work.
-> - The song editor opens, edits, and saves songs with 3 to 6 parts.
-> - Fixed: the song editor crashed on undo after switching duet parts.
-> - Fixed: a song with an empty line after the header showed as a solo song in the song list.
+> - Ready check: with 2 or more players, the song waits until each player sings a note into their microphone, or
+>   presses their number (<kbd>1</kbd> to <kbd>6</kbd>). A panel over the note row of each player shows their
+>   avatar, color, and part. <kbd>Enter</kbd> starts at once. The game option **Ready Check** turns it off.
+> - Part cues: before a part sings again after a pause, its lyrics light up in the color of its player, with the
+>   avatars of its singers. Parts that do not sing for a while fade out. The lyrics option **Part Cues** selects
+>   them, and <kbd>C</kbd> changes them during a song.
+> - Lyrics in the Dark Blue player color use a lighter blue, so they are easy to read.
+>
+> Release `trio-2026.10.29`: players choose their part with <kbd>1</kbd> to <kbd>6</kbd> in the song list, the
+> lyrics of each part show near the notes of its singers, parts that nobody sings show in gray, and the song editor
+> edits songs with 3 to 6 parts.
 >
 > ![3 players sing a song with 3 parts](doc/multi-part-songs/sing-3-players.jpg)
 

@@ -13,6 +13,7 @@ official release.
 - Parts that nobody sings show in gray, without a score.
 - Ready check: with 2 or more players, each player sings a note into their microphone (or presses their number) before the song starts. A panel over each note row shows the avatar, color, and part of the player.
 - Part cues: before a part sings again after a pause, its lyrics light up in the color of its player. Parts that do not sing for a while fade out. <kbd>C</kbd> during the song changes the cues.
+- Lyrics in the Dark Blue player color use a lighter blue, so they are easy to read.
 - The song editor opens, edits, and saves songs with 3 to 6 parts.
 - Fixed: the song editor crashed on undo after switching duet parts. Songs with an empty line after the header showed as solo songs in the song list.
 - Solo songs and duet songs work as before.
