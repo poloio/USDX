@@ -1461,7 +1461,12 @@ begin
   begin
     Singer := ScreenSing.TrackSinger(TrackIndex);
     if (Singer >= 0) then
-      Col := GetPlayerColor(Ini.SingColor[Singer])
+    begin
+      Col := GetPlayerColor(Ini.SingColor[Singer]);
+      // very dark colors (dark blue) merge with the black outline of the lyrics, use their light variant
+      if (0.2126 * Col.R + 0.7152 * Col.G + 0.0722 * Col.B < 0.15) then
+        Col := GetPlayerLightColor(Ini.SingColor[Singer]);
+    end
     else
       Col := GetLyricGrayColor(4);
     ScreenSing.LyricsDuet[TrackIndex].LineColor_act.R := Col.R;

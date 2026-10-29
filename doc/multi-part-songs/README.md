@@ -116,7 +116,9 @@ With two or more players, the game shows the lyrics of all parts in the two duet
   players, for example with 4 players in two columns.
 
 Each part shows its current line, with its next line below. The text of the current line uses the color
-of a player of the part. If a line is too long for its part of the bar, the game makes the font smaller.
+of a player of the part. A very dark color (Dark Blue) uses its light variant, because it is hard to read
+with the black outline of the lyrics. If a line is too long for its part of the bar, the game makes the
+font smaller.
 
 The fork uses the duet lyrics bars of the theme. Themes do not need new sections.
 
