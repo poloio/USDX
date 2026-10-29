@@ -11,7 +11,7 @@
 > The branch `trio` has the changes. The branch `master` is a copy of the official project.
 > This fork is not an official release of UltraStar Deluxe.
 >
-> **What's new in the branch `trio` (October 29, 2026, not in a release build yet):**
+> **What's new (October 29, 2026, release `trio-2026.10.29`):**
 >
 > - Each player chooses their part: in the song list, the keys <kbd>1</kbd> to <kbd>6</kbd> give that player the
 >   next part. <kbd>Space</kbd> still rotates the parts of all players.
