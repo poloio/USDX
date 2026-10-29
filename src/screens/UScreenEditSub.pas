@@ -110,7 +110,7 @@ type
       TextSentence:            Integer;
       TextInfo:                Integer;
 
-      CurrentNote:             array[0..1] of Integer;
+      CurrentNote:             array[0..MAX_SONG_TRACKS-1] of Integer;
       PlaySentence:            boolean;
       PlayOne:                 boolean;
       PlayOneMidi:             boolean;
@@ -319,8 +319,8 @@ type
       ResizeNoteRight:         boolean;
       MoveNote:                boolean;
 
-      CurrentTrack:            Integer; // 0 or 1 (for duets)
-      EditorLyrics:            array[0..1] of TEditorLyrics;
+      CurrentTrack:            Integer; // 0 for P1, 1 for P2, ...
+      EditorLyrics:            array[0..MAX_SONG_TRACKS-1] of TEditorLyrics;
 
       //undo declaration
       UndoLines:               array of array of TLines;
@@ -411,8 +411,9 @@ type
       procedure CopySentences(SrcTrack, SrcLine, DstTrack, DstLine, Num: Integer);
       procedure MakeSolo;
       procedure MakeDuet;
-      function  DuetCopyLine: boolean;
-      function  DuetMoveLine: boolean;
+      function  DuetCopyLine(DstTrack: Integer): boolean;
+      function  DuetMoveLine(DstTrack: Integer): boolean;
+      function  ShownTrack(Slot: Integer): Integer;
       procedure CopyLine(SrcTrack, SrcLine, DstTrack, DstLine: Integer);
       function  CheckTimingSyntaxErrors(out ErrorMessages: UTF8String): boolean;
       function  SaveSongToFile(const SaveRelative: boolean): boolean;
@@ -1815,7 +1816,7 @@ begin
 
     if Interaction = MedleyStartSlideId then
     begin
-      BackupEditText := ifthen(CurrentSong.DuetNames[0] <> '', CurrentSong.DuetNames[0], NOT_SET);
+      BackupEditText := ifthen(CurrentSong.DuetNames[ShownTrack(0)] <> '', CurrentSong.DuetNames[ShownTrack(0)], NOT_SET);
       CurrentEditText := ifthen(BackupEditText <> NOT_SET, BackupEditText, '');
       editLengthText := LengthUTF8(BackupEditText);
       CurrentSlideId := MedleyStartSlideId;
@@ -1826,7 +1827,7 @@ begin
 
     if Interaction = MedleyEndSlideId then
     begin
-      BackupEditText := ifthen(CurrentSong.DuetNames[1] <> '', CurrentSong.DuetNames[1], NOT_SET);
+      BackupEditText := ifthen(CurrentSong.DuetNames[ShownTrack(1)] <> '', CurrentSong.DuetNames[ShownTrack(1)], NOT_SET);
       CurrentEditText := ifthen(BackupEditText <> NOT_SET, BackupEditText, '');
       editLengthText := LengthUTF8(BackupEditText);
       CurrentSlideId := MedleyEndSlideId;
@@ -2245,36 +2246,36 @@ begin
     GoldenRec.KillAll;
   end;
 
-  // switch to second track, if possible
+  // switch to next track, if possible
   if ((SDL_ModState = KMOD_LCTRL) or (SDL_ModState = KMOD_LALT)) and (CurrentSong.isDuet) then
   begin
     if (Length(CurrentSong.Tracks[CurrentTrack].Lines[CurrentSong.Tracks[CurrentTrack].CurrentLine].Notes) > 0) then
     begin
       CurrentSong.Tracks[CurrentTrack].Lines[CurrentSong.Tracks[CurrentTrack].CurrentLine].Notes[CurrentNote[CurrentTrack]].Color := 1;
-      CurrentTrack := 1;
+      CurrentTrack := Min(CurrentTrack + 1, High(CurrentSong.Tracks));
       CurrentSong.Tracks[CurrentTrack].Lines[CurrentSong.Tracks[CurrentTrack].CurrentLine].Notes[CurrentNote[CurrentTrack]].Color := P1_INVERTED;
       EditorLyrics[CurrentTrack].AddLine(CurrentTrack, CurrentSong.Tracks[CurrentTrack].CurrentLine);
       EditorLyrics[CurrentTrack].Selected := 0;
-      Text[TextInfo].Text := Language.Translate('EDIT_INFO_SWITCHED_TO_TRACK') + ' 2 (' + CurrentSong.DuetNames[CurrentTrack] + ')';
+      Text[TextInfo].Text := Language.Translate('EDIT_INFO_SWITCHED_TO_TRACK') + ' ' + IntToStr(CurrentTrack + 1) + ' (' + CurrentSong.DuetNames[CurrentTrack] + ')';
     end;
   end;
 
-  // copy line from first to second track
-  if (CurrentSong.isDuet) and (CurrentTrack = 0) and (SDL_ModState = KMOD_LSHIFT or KMOD_LCTRL) then
+  // copy line to next track
+  if (CurrentSong.isDuet) and (CurrentTrack < High(CurrentSong.Tracks)) and (SDL_ModState = KMOD_LSHIFT or KMOD_LCTRL) then
   begin
     CopyToUndo;
-    if (DuetCopyLine) then
-      Text[TextInfo].Text := Language.Translate('EDIT_INFO_LINE_COPIED_TO_TRACK') + ' 2'
+    if (DuetCopyLine(CurrentTrack + 1)) then
+      Text[TextInfo].Text := Language.Translate('EDIT_INFO_LINE_COPIED_TO_TRACK') + ' ' + IntToStr(CurrentTrack + 2)
     else
       Text[TextInfo].Text := Language.Translate('EDIT_INFO_LINE_NOT_COPIED');
   end;
 
-  // move line from first to second track
-  if (CurrentSong.isDuet) and (CurrentTrack = 0) and (SDL_ModState = KMOD_LSHIFT or KMOD_LCTRL or KMOD_LALT) then
+  // move line to next track
+  if (CurrentSong.isDuet) and (CurrentTrack < High(CurrentSong.Tracks)) and (SDL_ModState = KMOD_LSHIFT or KMOD_LCTRL or KMOD_LALT) then
   begin
     CopyToUndo;
-    if (DuetMoveLine) then
-      Text[TextInfo].Text := Language.Translate('EDIT_INFO_LINE_MOVED_TO_TRACK') + ' 2'
+    if (DuetMoveLine(CurrentTrack + 1)) then
+      Text[TextInfo].Text := Language.Translate('EDIT_INFO_LINE_MOVED_TO_TRACK') + ' ' + IntToStr(CurrentTrack + 2)
     else
       Text[TextInfo].Text := Language.Translate('EDIT_INFO_LINE_NOT_MOVED');
   end;
@@ -2302,36 +2303,36 @@ begin
     GoldenRec.KillAll;
   end;
 
-  // switch to first track, if possible
+  // switch to previous track, if possible
   if ((SDL_ModState = KMOD_LCTRL) or (SDL_ModState = KMOD_LALT)) and (CurrentSong.isDuet) then
   begin
     if (Length(CurrentSong.Tracks[CurrentTrack].Lines[CurrentSong.Tracks[CurrentTrack].CurrentLine].Notes) > 0) then
     begin
       CurrentSong.Tracks[CurrentTrack].Lines[CurrentSong.Tracks[CurrentTrack].CurrentLine].Notes[CurrentNote[CurrentTrack]].Color := 1;
-      CurrentTrack := 0;
+      CurrentTrack := Max(CurrentTrack - 1, 0);
       CurrentSong.Tracks[CurrentTrack].Lines[CurrentSong.Tracks[CurrentTrack].CurrentLine].Notes[CurrentNote[CurrentTrack]].Color := P1_INVERTED;
       EditorLyrics[CurrentTrack].AddLine(CurrentTrack, CurrentSong.Tracks[CurrentTrack].CurrentLine);
       EditorLyrics[CurrentTrack].Selected := 0;
-      Text[TextInfo].Text := Language.Translate('EDIT_INFO_SWITCHED_TO_TRACK') + ' 1 (' + CurrentSong.DuetNames[CurrentTrack] + ')';
+      Text[TextInfo].Text := Language.Translate('EDIT_INFO_SWITCHED_TO_TRACK') + ' ' + IntToStr(CurrentTrack + 1) + ' (' + CurrentSong.DuetNames[CurrentTrack] + ')';
     end;
   end;
 
-  // copy line from second to first track
-  if (CurrentSong.isDuet) and (CurrentTrack = 1) and (SDL_ModState = KMOD_LSHIFT or KMOD_LCTRL) then
+  // copy line to previous track
+  if (CurrentSong.isDuet) and (CurrentTrack > 0) and (SDL_ModState = KMOD_LSHIFT or KMOD_LCTRL) then
   begin
     CopyToUndo;
-    if (DuetCopyLine) then
-      Text[TextInfo].Text := Language.Translate('EDIT_INFO_LINE_COPIED_TO_TRACK') + ' 1'
+    if (DuetCopyLine(CurrentTrack - 1)) then
+      Text[TextInfo].Text := Language.Translate('EDIT_INFO_LINE_COPIED_TO_TRACK') + ' ' + IntToStr(CurrentTrack)
     else
       Text[TextInfo].Text := Language.Translate('EDIT_INFO_LINE_NOT_COPIED');
   end;
 
-  // move line from second to first track
-  if (CurrentSong.isDuet) and (CurrentTrack = 1) and (SDL_ModState = KMOD_LSHIFT or KMOD_LCTRL or KMOD_LALT) then
+  // move line to previous track
+  if (CurrentSong.isDuet) and (CurrentTrack > 0) and (SDL_ModState = KMOD_LSHIFT or KMOD_LCTRL or KMOD_LALT) then
   begin
     CopyToUndo;
-    if (DuetMoveLine) then
-      Text[TextInfo].Text := Language.Translate('EDIT_INFO_LINE_MOVED_TO_TRACK') + ' 1'
+    if (DuetMoveLine(CurrentTrack - 1)) then
+      Text[TextInfo].Text := Language.Translate('EDIT_INFO_LINE_MOVED_TO_TRACK') + ' ' + IntToStr(CurrentTrack)
     else
       Text[TextInfo].Text := Language.Translate('EDIT_INFO_LINE_NOT_MOVED');
   end;
@@ -2413,12 +2414,12 @@ begin
           end;
           if P1EditMode then
           begin
-            CurrentSong.DuetNames[0] := ifthen(BackupEditText <> NOT_SET, BackupEditText, '');
+            CurrentSong.DuetNames[ShownTrack(0)] := ifthen(BackupEditText <> NOT_SET, BackupEditText, '');
             SelectsS[CurrentSlideId].TextOpt[0].Text := BackupEditText;
           end;
           if P2EditMode then
           begin
-            CurrentSong.DuetNames[1] := ifthen(BackupEditText <> NOT_SET, BackupEditText, '');
+            CurrentSong.DuetNames[ShownTrack(1)] := ifthen(BackupEditText <> NOT_SET, BackupEditText, '');
             SelectsS[CurrentSlideId].TextOpt[0].Text := BackupEditText;
           end;
           EditorLyrics[CurrentTrack].AddLine(CurrentTrack, CurrentSong.Tracks[CurrentTrack].CurrentLine);
@@ -2516,8 +2517,8 @@ begin
           end;
           if P1EditMode then
           begin
-            CurrentSong.DuetNames[0] := UTF8Copy(CurrentEditText, 1, TextPosition) + UTF8Copy(CurrentEditText, TextPosition+1, LengthUTF8(CurrentEditText)-TextPosition);
-            MedleyStartVal[0] := ifthen(CurrentSong.DuetNames[0] <> '', CurrentSong.DuetNames[0], NOT_SET);
+            CurrentSong.DuetNames[ShownTrack(0)] := UTF8Copy(CurrentEditText, 1, TextPosition) + UTF8Copy(CurrentEditText, TextPosition+1, LengthUTF8(CurrentEditText)-TextPosition);
+            MedleyStartVal[0] := ifthen(CurrentSong.DuetNames[ShownTrack(0)] <> '', CurrentSong.DuetNames[ShownTrack(0)], NOT_SET);
             SelectsS[CurrentSlideId].TextOpt[0].Text := CurrentEditText;
             UpdateSelectSlideOptions(MedleyStartSlideId,MedleyStartVal,SlideMedleyStartIndex);
             SelectsS[MedleyStartSlideId].TextOpt[0].Align := 0;
@@ -2525,8 +2526,8 @@ begin
           end;
           if P2EditMode then
           begin
-            CurrentSong.DuetNames[1] := UTF8Copy(CurrentEditText, 1, TextPosition) + UTF8Copy(CurrentEditText, TextPosition+1, LengthUTF8(CurrentEditText)-TextPosition);
-            MedleyEndVal[0] := ifthen(CurrentSong.DuetNames[1] <> '', CurrentSong.DuetNames[1], NOT_SET);
+            CurrentSong.DuetNames[ShownTrack(1)] := UTF8Copy(CurrentEditText, 1, TextPosition) + UTF8Copy(CurrentEditText, TextPosition+1, LengthUTF8(CurrentEditText)-TextPosition);
+            MedleyEndVal[0] := ifthen(CurrentSong.DuetNames[ShownTrack(1)] <> '', CurrentSong.DuetNames[ShownTrack(1)], NOT_SET);
             SelectsS[CurrentSlideId].TextOpt[0].Text := CurrentEditText;
             UpdateSelectSlideOptions(MedleyEndSlideId,MedleyEndVal,SlideMedleyEndIndex);
             SelectsS[MedleyEndSlideId].TextOpt[0].Align := 0;
@@ -4208,12 +4209,11 @@ begin
   CurrentSong.Medley.Source := msNone;
 end;
 
-function TScreenEditSub.DuetCopyLine: boolean;
+function TScreenEditSub.DuetCopyLine(DstTrack: Integer): boolean;
 var
   SrcLine:      Integer;
   DstLine:      Integer;
   SrcTrack:     Integer;
-  DstTrack:     Integer;
 
   SrcStartBeat: Integer;
   SrcEndBeat:   Integer;
@@ -4232,7 +4232,6 @@ begin
   Result := false;
 
   SrcTrack := CurrentTrack;
-  DstTrack := (CurrentTrack + 1) mod 2;
   SrcLine := CurrentSong.Tracks[SrcTrack].CurrentLine;
   DstLine := -1;
 
@@ -4325,11 +4324,20 @@ begin
   CurrentSong.Tracks[DstTrack].Lines[DstLine].Notes := Copy(CurrentSong.Tracks[SrcTrack].Lines[SrcLine].Notes);
 end;
 
-function TScreenEditSub.DuetMoveLine: boolean;
+function TScreenEditSub.DuetMoveLine(DstTrack: Integer): boolean;
 begin
-  Result := DuetCopyLine;
+  Result := DuetCopyLine(DstTrack);
   if (Result) then
     DeleteSentence;
+end;
+
+// The header and the info bars have room for two tracks (Slot 0 and 1).
+// Duets show P1 and P2. Songs with more tracks show the pair with the current
+// track: P1 and P2, P3 and P4, P5 and P6. An odd last track shows with the
+// track before it.
+function TScreenEditSub.ShownTrack(Slot: Integer): Integer;
+begin
+  Result := Max(0, Min(CurrentTrack - CurrentTrack mod 2, High(CurrentSong.Tracks) - 1)) + Slot;
 end;
 
 procedure TScreenEditSub.CopyToUndo;
@@ -4679,7 +4687,8 @@ begin
   SongEnd := FindEndBeat;
   SongDuration := SongEnd - SongStart;
 
-  Statics[playerIconId[Track+1]].Visible := true;
+  // the two info bars show tracks next to each other, each gets one icon
+  Statics[playerIconId[Track mod 2 + 1]].Visible := true;
 
   for i := 0 to High(TransparentLineButtonId) do
   begin
@@ -5135,6 +5144,8 @@ begin
 end;
 
 constructor TScreenEditSub.Create;
+var
+  TrackIndex: Integer;
 begin
   inherited Create;
   LoadFromTheme(Theme.EditSub);
@@ -5147,8 +5158,8 @@ begin
   ResetMidiLastNote;
   {$ENDIF}
 
-  EditorLyrics[0] := TEditorLyrics.Create;
-  EditorLyrics[1] := TEditorLyrics.Create;
+  for TrackIndex := 0 to High(EditorLyrics) do
+    EditorLyrics[TrackIndex] := TEditorLyrics.Create;
 
   SetLength(Player, 1);
   SetLength(TitleVal, 0);
@@ -6062,14 +6073,14 @@ begin
       MedleyEndVal[0] := NOT_SET;
     SelectsS[MedleyEndSlideId].TextOpt[0].Text := MedleyEndVal[0];
   end
-  else // reuse for P1/P2 tag
+  else // reuse for the P1/P2 tags (the tags of the shown tracks)
   begin
-    SelectsS[MedleyStartSlideId].Text.Text := 'P1:';
-    MedleyStartVal[0] := CurrentSong.DuetNames[0];
+    SelectsS[MedleyStartSlideId].Text.Text := 'P' + IntToStr(ShownTrack(0) + 1) + ':';
+    MedleyStartVal[0] := CurrentSong.DuetNames[ShownTrack(0)];
     SelectsS[MedleyStartSlideId].TextOpt[0].Text := MedleyStartVal[0];
     SelectsS[MedleyStartSlideId].TextOpt[0].Writable := true;
-    SelectsS[MedleyEndSlideId].Text.Text := 'P2:';
-    MedleyEndVal[0] := CurrentSong.DuetNames[1];
+    SelectsS[MedleyEndSlideId].Text.Text := 'P' + IntToStr(ShownTrack(1) + 1) + ':';
+    MedleyEndVal[0] := CurrentSong.DuetNames[ShownTrack(1)];
     SelectsS[MedleyEndSlideId].TextOpt[0].Text := MedleyEndVal[0];
     SelectsS[MedleyEndSlideId].TextOpt[0].Writable := true;
   end;
@@ -6131,11 +6142,11 @@ begin
   EditDrawBorderedBox(Theme.EditSub.VolumeSliderBackground.X, Theme.EditSub.VolumeSliderBackground.Y, Theme.EditSub.VolumeSliderBackground.W, Theme.EditSub.VolumeSliderBackground.H, Theme.EditSub.VolumeSliderBackground.ColR, Theme.EditSub.VolumeSliderBackground.ColG, Theme.EditSub.VolumeSliderBackground.ColB, Theme.EditSub.VolumeSliderBackground.Alpha);
 
   // P1 info bar
-  DrawInfoBar(Theme.EditSub.P1InfoBarBackground.X, Theme.EditSub.P1InfoBarBackground.Y, Theme.EditSub.P1InfoBarBackground.W, Theme.EditSub.P1InfoBarBackground.H, Theme.EditSub.P1InfoBarBackground.ColR, Theme.EditSub.P1InfoBarBackground.ColG, Theme.EditSub.P1InfoBarBackground.ColB, Theme.EditSub.P1InfoBarBackground.Alpha, 0);
+  DrawInfoBar(Theme.EditSub.P1InfoBarBackground.X, Theme.EditSub.P1InfoBarBackground.Y, Theme.EditSub.P1InfoBarBackground.W, Theme.EditSub.P1InfoBarBackground.H, Theme.EditSub.P1InfoBarBackground.ColR, Theme.EditSub.P1InfoBarBackground.ColG, Theme.EditSub.P1InfoBarBackground.ColB, Theme.EditSub.P1InfoBarBackground.Alpha, ShownTrack(0));
 
   // P2 info bar - for duet mode
   if (CurrentSong.isDuet) then
-    DrawInfoBar(Theme.EditSub.P2InfoBarBackground.X, Theme.EditSub.P2InfoBarBackground.Y, Theme.EditSub.P2InfoBarBackground.W, Theme.EditSub.P2InfoBarBackground.H, Theme.EditSub.P2InfoBarBackground.ColR, Theme.EditSub.P2InfoBarBackground.ColG, Theme.EditSub.P2InfoBarBackground.ColB, Theme.EditSub.P2InfoBarBackground.Alpha, 1);
+    DrawInfoBar(Theme.EditSub.P2InfoBarBackground.X, Theme.EditSub.P2InfoBarBackground.Y, Theme.EditSub.P2InfoBarBackground.W, Theme.EditSub.P2InfoBarBackground.H, Theme.EditSub.P2InfoBarBackground.ColR, Theme.EditSub.P2InfoBarBackground.ColG, Theme.EditSub.P2InfoBarBackground.ColB, Theme.EditSub.P2InfoBarBackground.Alpha, ShownTrack(1));
 
   // sentence background
   EditDrawBorderedBox(Theme.EditSub.SentenceBackground.X, Theme.EditSub.SentenceBackground.Y, Theme.EditSub.SentenceBackground.W, Theme.EditSub.SentenceBackground.H, Theme.EditSub.SentenceBackground.ColR, Theme.EditSub.SentenceBackground.ColG, Theme.EditSub.SentenceBackground.ColB, Theme.EditSub.SentenceBackground.Alpha);

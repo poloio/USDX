@@ -4231,15 +4231,6 @@ end;
 
 procedure TScreenSong.OpenEditor;
 begin
-  // the editor handles solo songs and duets only, saving would lose P3, P4, ...
-  if (Songs.SongList.Count > 0) and
-     (not CatSongs.Song[Interaction].Main) and
-     (CatSongs.Song[Interaction].TrackCount > 2) then
-  begin
-    ScreenPopupError.ShowPopup(Language.Translate('ERROR_MULTI_TRACK_NOT_EDITABLE'));
-    Exit;
-  end;
-
   if (Songs.SongList.Count > 0) and
      (not CatSongs.Song[Interaction].Main) and
      // currently, the editor is not suitable to edit duets
