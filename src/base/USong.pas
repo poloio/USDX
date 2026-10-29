@@ -1141,6 +1141,10 @@ begin
       end;
     end; // while
 
+    // skip empty lines between the header and the notes, as LoadOpenedSong does
+    while (Trim(Line) = '') and SongFile.ReadLine(Line) do
+      Inc(FileLineNo);
+
     // Lightweight duet detection for song list: if the first non-header
     // note-section line starts with a P-track marker, this is a duet.
     if GetFirstNonWhitespaceChar(Line) = 'P' then
